@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="data:,">
+<title>Офис ботов</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#0b1020;color:#e8ecff;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden;overscroll-behavior:none}
+#top{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 8px) 14px 8px;background:linear-gradient(#0b1020ee,#0b102000);z-index:3;pointer-events:none}
+#top h1{margin:0;font-size:18px;letter-spacing:.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
+#stats{font-size:12.5px;color:#a9b4e6;margin-top:3px}
+#upd{font-size:11px;color:#7380b8;margin-top:2px}
+#legendBtn{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 10px);z-index:4;width:34px;height:34px;border-radius:17px;border:1px solid #3a4b9a;background:#141c3a;color:#cfd8ff;font-size:16px}
+#legend{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 50px);z-index:5;background:#fff;color:#1b2040;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.55;max-width:300px;box-shadow:0 8px 30px #0008;display:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;image-rendering:pixelated}
+#bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 12px);z-index:3;display:flex;gap:6px;align-items:center;background:#121a36e8;border:1px solid #2c3d8f;border-radius:16px;padding:6px;box-shadow:0 4px 18px #0007;max-width:calc(100vw - 16px)}
+#bar button{height:38px;min-width:38px;border-radius:11px;border:0;background:#1d2850;color:#e8ecff;font-size:16px;padding:0 10px}
+#bar button.on{background:#3047b8}
+#where{font-size:13px;min-width:112px;max-width:150px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+#card{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 66px);z-index:6;width:min(440px,calc(100vw - 16px));max-height:62vh;overflow:auto;background:#fff;color:#1b2040;border-radius:18px;padding:14px 16px 12px;box-shadow:0 10px 40px #000a;display:none}
+#card h2{margin:0 0 2px;font-size:18px;display:flex;align-items:center;gap:8px}
+#card .dot{width:10px;height:10px;border-radius:5px;display:inline-block;flex:none}
+#card .sub{color:#56608f;font-size:13px;margin-bottom:8px}
+#card .row{font-size:13.5px;margin:5px 0;line-height:1.4}
+#card .k{color:#7a83ad}
+#card .chip{display:inline-block;background:#eef1ff;border-radius:9px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12.5px;cursor:pointer}
+#card .chip.g{background:#fff4d6}
+#card .list div{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #eef0f8;font-size:13.5px;cursor:pointer}
+#card .back{margin-top:10px;width:100%;height:40px;border:0;border-radius:12px;background:#1b2040;color:#fff;font-size:15px}
+#card .tag{font-size:11px;background:#e3e7ff;color:#3047b8;border-radius:6px;padding:1px 6px;font-weight:600}
+#card .tag.t{background:#ffe7c2;color:#9a5a00}
+.spark{display:flex;gap:2px;align-items:flex-end;height:26px;margin:4px 0 2px}
+.spark i{flex:1;background:#3047b8;border-radius:2px 2px 0 0;min-height:2px;opacity:.85}
+@media (min-width:900px){#card{left:auto;right:16px;transform:none;top:86px;bottom:auto;width:400px;max-height:calc(100vh - 170px)}}
+#err{position:fixed;inset:auto 0 50% 0;text-align:center;color:#ff9b9b;display:none;z-index:9}
+</style>
+</head>
+<body>
+<div id="top"><h1>▣ Офис ботов</h1><div id="stats">загрузка…</div><div id="upd"></div></div>
+<button id="legendBtn" aria-label="Легенда">?</button>
+<div id="legend"></div>
+<canvas id="c"></canvas>
+<div id="bar">
+ <button id="prev" aria-label="Назад">‹</button><div id="where">Весь офис</div><button id="next" aria-label="Вперёд">›</button>
+ <button id="zout" aria-label="Отдалить">−</button><button id="zin" aria-label="Приблизить">+</button>
+ <button id="links" class="on" aria-label="Связи">⇄</button><button id="pause" aria-label="Пауза">❚❚</button>
+</div>
+<div id="card"></div>
+<div id="err"></div>
+<script>
+'use strict';
+const T=16; // тайл, px мира
+const LAYOUTS={
+ wide:{W:56,H:37,R:{clean:{x:2,y:2,w:18,h:12},lead:{x:22,y:2,w:14,h:12},sales:{x:38,y:2,w:16,h:12},digital:{x:2,y:22,w:18,h:13},lab:{x:22,y:22,w:14,h:13},personal:{x:38,y:22,w:16,h:13}},HALL:{x:2,y:15,w:52,h:6},TABLE:{x:44,y:17.6}},
+ tall:{W:36,H:54,R:{clean:{x:2,y:2,w:16,h:14},lead:{x:20,y:2,w:14,h:14},sales:{x:2,y:17,w:16,h:13},personal:{x:20,y:17,w:14,h:13},digital:{x:2,y:39,w:16,h:13},lab:{x:20,y:39,w:14,h:13}},HALL:{x:2,y:31,w:32,h:7},TABLE:{x:27,y:34.6}}
+};
+let LAY=null,W,H,ROOMS,HALL,TABLE;
+function pickLayout(){const k=innerWidth/innerHeight<0.85?'tall':'wide';if(LAY===k)return false;LAY=k;const L=LAYOUTS[k];W=L.W;H=L.H;ROOMS=L.R;HALL=L.HALL;TABLE=L.TABLE;return true}
+pickLayout();
+const FLOOR={lead:['#5b4a2e','#66543a'],clean:['#24546b','#2a6079'],sales:['#6b3d2e','#774636'],digital:['#4a2f63','#553870'],personal:['#2f5a36','#37663f'],lab:['#3c4450','#454e5c']};
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+let D=null,bots=[],bySlug={},depts=[],deptById={},rooms=[],links=[];
+let cam={x:W*T/2,y:H*T/2,s:1},camT=null,paused=false,showLinks=true,sel=null,selRoom=null,viewIdx=-1,t0=performance.now(),lastNow=Date.now();
+const DPR=Math.min(window.devicePixelRatio||1,3);
+function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;if(pickLayout()&&D){apply(D);closeCard();viewIdx=-1;setWhere()}if(!camT&&viewIdx<0)fitAll(true)}
+addEventListener('resize',resize);
+// ---------- время
+const pad=n=>String(n).padStart(2,'0');
+function astana(ms){const d=new Date(ms+5*3600e3);return d}
+function fmtAbs(ms){if(!ms)return '—';const d=astana(ms),n=astana(Date.now());const hm=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+ const sameDay=d.toISOString().slice(0,10)===n.toISOString().slice(0,10);const y=astana(Date.now()-864e5).toISOString().slice(0,10)===d.toISOString().slice(0,10);
+ return sameDay?'сегодня '+hm:(y?'вчера '+hm:pad(d.getUTCDate())+'.'+pad(d.getUTCMonth()+1)+' '+hm)}
+function fmtAgo(ms){if(!ms)return 'нет данных';const m=(Date.now()-ms)/6e4;if(m<2)return 'только что';if(m<60)return Math.round(m)+' мин назад';if(m<24*60)return Math.round(m/60)+' ч назад';const d=Math.round(m/1440);return d+' '+(d%10==1&&d%100!=11?'день':(d%10>=2&&d%10<=4&&(d%100<10||d%100>=20)?'дня':'дней'))+' назад'}
+function plural(n,a,b,c){n=Math.abs(n);const m10=n%10,m100=n%100;return m10==1&&m100!=11?a:(m10>=2&&m10<=4&&(m100<10||m100>=20)?b:c)}
+// ---------- статус
+function status(b){const a=b.act,last=a.last||b.last_file||0,age=Date.now()-last;
+ if(last&&age<30*6e4)return 'busy';
+ if(last&&age<864e5)return 'today';
+ if(last&&age<7*864e5)return 'week';
+ return 'sleep'}
+const ST={busy:['#ffd23f','Работает сейчас'],today:['#5ee38a','Был активен сегодня'],week:['#7aa8ff','Активен на этой неделе'],sleep:['#8a90a8','Спит больше недели']};
+function waiting(b){return b.act.waiting&&b.act.last_user&&Date.now()-b.act.last_user<3*864e5}
+// ---------- данные
+async function load(){
+ try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();apply(d)}
+ catch(e){if(!D){const el=document.getElementById('err');el.style.display='block';el.textContent='Не удалось загрузить данные'}}
+}
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function apply(d){
+ const prevPos={};bots.forEach(b=>prevPos[b.slug]=b);
+ D=d;depts=d.departments.filter(x=>ROOMS[x.id]);deptById={};depts.forEach(x=>deptById[x.id]=x);
+ bots=d.bots.map(b=>Object.assign({},b,{dept:ROOMS[b.dept]?b.dept:'lab'}));bySlug={};
+ rooms=depts.map(dp=>({id:dp.id,name:dp.name,color:dp.color,r:ROOMS[dp.id],bots:[]}));
+ const roomBy={};rooms.forEach(r=>roomBy[r.id]=r);
+ bots.forEach(b=>{bySlug[b.slug]=b;roomBy[b.dept].bots.push(b)});
+ rooms.forEach(rm=>{const r=rm.r,cols=Math.max(1,Math.floor((r.w-2)/4));
+  rm.bots.forEach((b,i)=>{const c=i%cols,row=Math.floor(i/cols);
+   b.desk={x:(r.x+1.6+c*4)*T+T,y:(r.y+3+row*4.2)*T};
+   const h=hash(b.slug);b.hue=h;b.room=rm;b.st=status(b);
+   const p=prevPos[b.slug];b.x=p?p.x:b.desk.x;b.y=p?p.y:b.desk.y-6;b.tx=p?p.tx:b.x;b.ty=p?p.ty:b.y;b.walkT=p?p.walkT:0;b.dir=1})});
+ (d.groups||[]).forEach(g=>{bySlug[g.slug]={slug:g.slug,name:g.name,group:true,members:g.members,act:g.act,x:TABLE.x*T,y:TABLE.y*T}});
+ links=(d.links||[]).filter(l=>bySlug[l.from]&&bySlug[l.to]);
+ const busy=bots.filter(b=>b.st==='busy').length,today=bots.filter(b=>b.st!=='sleep'&&b.st!=='week').length;
+ document.getElementById('stats').textContent=`Отделов ${rooms.length} • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today}`;
+ document.getElementById('upd').textContent='Данные обновлены '+fmtAbs(d.generated)+' (Астана) · обновляются сами';
+ if(sel&&bySlug[sel.slug])openBot(bySlug[sel.slug],true);
+}
+// ---------- камера
+function viewW(){return cv.width/DPR}function viewH(){return cv.height/DPR}
+function fitRect(x,y,w,h,inst){const vw=viewW(),vh=viewH()-150;const s=Math.min(vw/(w+T),vh/(h+T));const tgt={x:x+w/2,y:y+h/2,s:Math.max(.3,Math.min(s,6))};
+ tgt.y+= (55-(vh>500? 20:0))/tgt.s*0; if(inst){cam=tgt;camT=null}else camT={from:{...cam},to:tgt,t:performance.now()}}
+function freeRect(){const vw=viewW(),vh=viewH();const r={x:8,y:78,w:vw-16,h:vh-78-70};
+ if(card.style.display==='block'){const c=card.getBoundingClientRect();if(vw>=900){r.w=c.left-16}else{r.h=c.top-r.y-8}}
+ return r}
+function fitInto(x,y,w,h,maxS){const f=freeRect();const s=Math.max(.3,Math.min(maxS||6,f.w/w,f.h/h));const wcx=x+w/2,wcy=y+h/2,scx=f.x+f.w/2,scy=f.y+f.h/2;
+ camT={from:{...cam},to:{x:wcx-(scx-viewW()/2)/s,y:wcy-(scy-viewH()/2-10)/s,s},t:performance.now()}}
+function fitAll(inst){fitRect(0,0,W*T,H*T,inst)}
+function fitRoom(rm,inst){const r=rm.r;fitRect(r.x*T,r.y*T,r.w*T,r.h*T,inst)}
+function w2s(x,y){return[(x-cam.x)*cam.s+viewW()/2,(y-cam.y)*cam.s+(viewH())/2+10]}
+function s2w(x,y){return[(x-viewW()/2)/cam.s+cam.x,(y-viewH()/2-10)/cam.s+cam.y]}
+// ---------- пиксель-спрайт
+const SPR=[
+"...hhhh...",
+"..hhhhhh..",
+".hhhhhhhh.",
+".hssssssh.",
+".seesesse.",
+".ssssssss.",
+"..ssmmss..",
+"..cccccc..",
+".cccccccc.",
+"scccccccs.",
+"s.cccccc.s",
+"..pppppp..",
+"..pp..pp..",
+"..bb..bb.."];
+const HAIR=['#2b1d14','#4a2c17','#111','#6b4423','#c49a52','#7b2d1a','#3a3a3a'];
+const SKIN=['#f1c9a5','#e0ac80','#c98e62','#f5d6b8'];
+function shirtColor(b){const base=deptById[b.dept]?deptById[b.dept].color:'#999';return base}
+function drawSprite(b,x,y,frame,sitting){
+ const px=1.6; // мировых px на пиксель спрайта
+ const h=b.hue,cols={h:HAIR[h%HAIR.length],s:SKIN[(h>>3)%SKIN.length],e:'#1b1b2a',m:'#a0524a',c:shirtColor(b),p:'#2c3350',b:'#15182a'};
+ if(b.boss)cols.c='#1b1b1b';
+ const rows=sitting?11:14;
+ for(let r=0;r<rows;r++){const line=SPR[r];for(let c=0;c<10;c++){let ch=line[c];if(ch==='.')continue;
+  if(!sitting&&r>=12&&frame){ // шаг
+   if((c<5)===(frame===1)&&r===13)continue;}
+  ctx.fillStyle=cols[ch];ctx.fillRect(x+(c-5)*px,y+(r-14)*px,px+.05,px+.05)}}
+ if(b.boss){ctx.fillStyle='#ffd23f';ctx.fillRect(x-3*px,y-16.5*px,6*px,1.4*px);ctx.fillRect(x-3*px,y-18*px,px,1.6*px);ctx.fillRect(x-.5*px,y-18.5*px,px,2*px);ctx.fillRect(x+2*px,y-18*px,px,1.6*px)}
+}
+function drawDesk(x,y,on){ // x,y = точка сиденья
+ ctx.fillStyle='#3a2a1c';ctx.fillRect(x-15,y-2,30,12);
+ ctx.fillStyle='#8a6240';ctx.fillRect(x-15,y-4,30,10);
+ ctx.fillStyle='#a77a52';ctx.fillRect(x-15,y-4,30,2);
+ ctx.fillStyle='#222';ctx.fillRect(x-6,y-1,12,6);
+ ctx.fillStyle=on?'#7fe0ff':'#2b3550';ctx.fillRect(x-5,y,10,4);
+ ctx.fillStyle='#ddd';ctx.fillRect(x+8,y+1,4,3);
+}
+// ---------- сцена
+function tile(x,y,c){ctx.fillStyle=c;ctx.fillRect(x*T,y*T,T,T)}
+function drawWorld(time){
+ ctx.fillStyle='#070a16';ctx.fillRect(-2000,-2000,W*T+4000,H*T+4000);
+ // коридоры
+ ctx.fillStyle='#121830';ctx.fillRect(1*T,1*T,(W-2)*T,(H-2)*T);
+ for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++)if((x+y)%2==0){ctx.fillStyle='#151c38';ctx.fillRect(x*T,y*T,T,T)}
+ // зал
+ const hl=HALL;ctx.fillStyle='#1a2246';ctx.fillRect(hl.x*T,hl.y*T,hl.w*T,hl.h*T);
+ for(let y=hl.y;y<hl.y+hl.h;y++)for(let x=hl.x;x<hl.x+hl.w;x++){if((x+y)%2){ctx.fillStyle='#1d264f';ctx.fillRect(x*T,y*T,T,T)}}
+ ctx.save();ctx.shadowColor='#3fa9ff';ctx.shadowBlur=8;ctx.strokeStyle='#3fa9ff';ctx.lineWidth=2;
+ ctx.strokeRect(1*T+1,1*T+1,(W-2)*T-2,(H-2)*T-2);ctx.strokeRect(hl.x*T,hl.y*T,hl.w*T,hl.h*T);ctx.restore();
+ // надпись на полу
+ ctx.save();ctx.font='bold '+(LAY==='wide'?34:26)+'px ui-monospace,Menlo,Consolas,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.fillStyle='rgba(120,170,255,.24)';ctx.fillText('НАШ БИЗНЕС',(LAY==='wide'?W/2-6:W/2-6)*T,(hl.y+hl.h/2)*T+2);ctx.restore();
+ // стол Asset 2.0
+ const tx=TABLE.x*T,ty=TABLE.y*T;ctx.fillStyle='#2a1e14';ctx.beginPath();ctx.ellipse(tx,ty+4,40,20,0,0,7);ctx.fill();
+ ctx.fillStyle='#8a6240';ctx.beginPath();ctx.ellipse(tx,ty,40,20,0,0,7);ctx.fill();ctx.fillStyle='#a77a52';ctx.beginPath();ctx.ellipse(tx,ty-2,34,15,0,0,7);ctx.fill();
+ ctx.fillStyle='#ffd23f';ctx.font='bold 10px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('ASSET 2.0',tx,ty+2);
+ const g=bySlug['asset20'];if(g&&g.act&&g.act.last&&Date.now()-g.act.last<864e5){ctx.fillStyle='rgba(255,210,63,'+(.35+.25*Math.sin(time/400))+')';ctx.beginPath();ctx.arc(tx,ty-26,4,0,7);ctx.fill()}
+ // комнаты
+ rooms.forEach(rm=>{const r=rm.r,f=FLOOR[rm.id]||FLOOR.lab;
+  for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++)tile(x,y,(x+y)%2?f[0]:f[1]);
+  // стена сверху
+  ctx.fillStyle='#1c1f33';ctx.fillRect(r.x*T,r.y*T,r.w*T,T*1.6);ctx.fillStyle='#2c3150';ctx.fillRect(r.x*T,r.y*T+T*1.3,r.w*T,4);
+  // окна
+  for(let x=r.x+1;x<r.x+r.w-1;x+=4){ctx.fillStyle='#5aa9d6';ctx.fillRect(x*T+4,r.y*T+5,T*1.6,10);ctx.fillStyle='#bfe6ff';ctx.fillRect(x*T+5,r.y*T+6,6,3)}
+  // декор: растения по углам, ковёр
+  plant((r.x+r.w-1)*T+8,(r.y+r.h-1)*T+6);plant(r.x*T+9,(r.y+r.h-1)*T+6);
+  ctx.save();ctx.shadowColor='#3fa9ff';ctx.shadowBlur=10;ctx.strokeStyle='#3fa9ff';ctx.lineWidth=2.5;ctx.strokeRect(r.x*T,r.y*T,r.w*T,r.h*T);ctx.restore();
+  // дверь в зал
+  const doorY=(rm.r.y<HALL.y)?(r.y+r.h)*T:r.y*T;ctx.fillStyle=f[1];ctx.fillRect((r.x+r.w/2-1.5)*T,doorY-3,3*T,6);
+ });
+}
+function plant(x,y){ctx.fillStyle='#6b3d22';ctx.fillRect(x-4,y,8,6);ctx.fillStyle='#2f8f46';ctx.beginPath();ctx.arc(x,y-3,7,0,7);ctx.fill();ctx.fillStyle='#43b45d';ctx.beginPath();ctx.arc(x-2,y-5,4,0,7);ctx.fill()}
+function bulb(x,y,time){const p=.5+.5*Math.sin(time/260);ctx.save();ctx.shadowColor='#ffd23f';ctx.shadowBlur=10+8*p;ctx.fillStyle=`rgba(255,${200+40*p|0},60,1)`;ctx.beginPath();ctx.arc(x,y,4+p*1.3,0,7);ctx.fill();ctx.restore();ctx.fillStyle='#bbb';ctx.fillRect(x-2,y+4,4,3)}
+function updateBots(dt,time){
+ bots.forEach(b=>{b.st=status(b);const walker=b.st==='today'&&!b.boss&&!(sel&&sel.slug===b.slug);const r=b.room.r;
+  if(walker){
+   if(Math.hypot(b.tx-b.x,b.ty-b.y)<2){b.walkT-=dt;if(b.walkT<=0){b.tx=(r.x+1.5+Math.random()*(r.w-3))*T;b.ty=(r.y+2.8+Math.random()*(r.h-4))*T;b.walkT=1500+Math.random()*3500}}
+   else{const sp=.022*dt,a=Math.atan2(b.ty-b.y,b.tx-b.x);b.x+=Math.cos(a)*Math.min(sp,Math.hypot(b.tx-b.x,b.ty-b.y));b.y+=Math.sin(a)*Math.min(sp,Math.hypot(b.tx-b.x,b.ty-b.y))}
+  }else{const sx=b.desk.x,sy=b.desk.y-5;b.x+=(sx-b.x)*Math.min(1,dt/400);b.y+=(sy-b.y)*Math.min(1,dt/400);b.tx=b.x;b.ty=b.y}
+ })}
+function drawBots(time){
+ // столы и сидящие — по y
+ const items=[];
+ bots.forEach(b=>{items.push({y:b.desk.y-0.1,f:()=>{}});});
+ const seat=b=>Math.hypot(b.x-b.desk.x,b.y-(b.desk.y-5))<3;
+ const sorted=[...bots].sort((a,b)=>a.y-b.y);
+ // сначала сидящие + их столы
+ bots.forEach(b=>{if(seat(b)){drawSprite(b,b.x,b.y,0,true)}drawDesk(b.desk.x,b.desk.y,b.st==='busy'||b.st==='today')});
+ sorted.forEach(b=>{if(!seat(b)){const moving=Math.hypot(b.tx-b.x,b.ty-b.y)>2;drawSprite(b,b.x,b.y,moving?((time/180|0)%2)+1:0,false)}});
+ bots.forEach(b=>{const hy=b.y-26;
+  if(b.st==='busy')bulb(b.x,hy-2,time);
+  else if(b.st==='sleep'){ctx.fillStyle='rgba(200,210,255,.75)';ctx.font='bold 9px monospace';const o=(time/600)%3;ctx.fillText('z',b.x+8,hy+4-o);ctx.fillText('Z',b.x+12,hy-4-o)}
+  if(waiting(b)&&b.st!=='busy'){ctx.fillStyle='#fff';ctx.fillRect(b.x+7,hy-4,14,9);ctx.fillStyle='#333';ctx.fillRect(b.x+10,hy,2,2);ctx.fillRect(b.x+13,hy,2,2);ctx.fillRect(b.x+16,hy,2,2)}
+  if((b.act.routines||[]).some(r=>r.state==='работает')){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.x-10,hy+8,4,0,7);ctx.fill();ctx.strokeStyle='#3047b8';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(b.x-10,hy+8);ctx.lineTo(b.x-10,hy+5.5);ctx.moveTo(b.x-10,hy+8);ctx.lineTo(b.x-8,hy+8);ctx.stroke()}
+  if(b.test){ctx.fillStyle='#ff9f1a';ctx.fillRect(b.x-11,b.y-29,22,7);ctx.fillStyle='#1b1b1b';ctx.font='bold 6px monospace';ctx.textAlign='center';ctx.fillText('ТЕСТ',b.x,b.y-23.5);ctx.textAlign='left'}
+  if(sel&&sel.slug===b.slug){ctx.strokeStyle='#ffd23f';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(b.x,b.y+1,10,4,0,0,7);ctx.stroke()}
+ });
+}
+function linkStyle(l){if(l.kind==='group')return['rgba(255,210,63,.55)',1.2,[3,3]];if(l.kind==='known')return['rgba(170,180,220,.45)',1,[2,4]];
+ const recent=l.last&&Date.now()-l.last<7*864e5;return[recent?'rgba(80,200,255,.75)':'rgba(80,200,255,.35)',Math.min(4,1+Math.log2(1+l.n)*.7),[]]}
+function drawLinks(time){
+ if(!showLinks&&!sel)return;
+ links.forEach(l=>{const a=bySlug[l.from],b=bySlug[l.to];
+  const on=!sel||sel.slug===l.from||sel.slug===l.to;if(!on)return;
+  if(!sel&&l.kind==='known')return;
+  if(!sel&&l.kind==='data'&&!(l.last&&Date.now()-l.last<7*864e5))return;
+  const[c,w,dash]=linkStyle(l);const ax=a.x,ay=a.y-12,bx=b.x,by=b.y-12;const mx=(ax+bx)/2,my=(ay+by)/2-Math.min(60,Math.hypot(bx-ax,by-ay)*.18);
+  ctx.save();ctx.globalAlpha=sel?1:.75;ctx.strokeStyle=c;ctx.lineWidth=w*(sel?1.3:1);ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(ax,ay);ctx.quadraticCurveTo(mx,my,bx,by);ctx.stroke();ctx.restore();
+  if(l.kind==='data'&&l.last&&Date.now()-l.last<864e5*2){const t=((time/1800)+hash(l.from+l.to)%100/100)%1;const x=(1-t)*(1-t)*ax+2*(1-t)*t*mx+t*t*bx,y=(1-t)*(1-t)*ay+2*(1-t)*t*my+t*t*by;ctx.fillStyle='#bff4ff';ctx.beginPath();ctx.arc(x,y,2.5,0,7);ctx.fill()}
+ })}
+function drawLabels(){
+ // ярлыки комнат и имена — в экранных координатах
+ ctx.save();ctx.setTransform(DPR,0,0,DPR,0,0);
+ rooms.forEach(rm=>{const r=rm.r;const[sx,sy]=w2s((r.x+r.w/2)*T,r.y*T);const txt=rm.name;ctx.font='600 12px -apple-system,Roboto,sans-serif';const tw=ctx.measureText(txt).width+26;
+  ctx.fillStyle='rgba(255,255,255,.95)';rr(sx-tw/2,sy-11,tw,22,11);ctx.fill();ctx.fillStyle=rm.color;ctx.beginPath();ctx.arc(sx-tw/2+11,sy,4,0,7);ctx.fill();ctx.fillStyle='#1b2040';ctx.textBaseline='middle';ctx.fillText(txt,sx-tw/2+19,sy+.5)});
+ if(cam.s>=1.25){ctx.font='600 '+Math.min(12,7+cam.s*1.3)+'px -apple-system,Roboto,sans-serif';ctx.textAlign='center';
+  bots.forEach(b=>{const[sx,sy]=w2s(b.x,b.y+6);ctx.fillStyle='rgba(10,14,30,.7)';const tw=ctx.measureText(b.name).width+8;rr(sx-tw/2,sy-1,tw,15,5);ctx.fill();ctx.fillStyle='#fff';ctx.textBaseline='top';ctx.fillText(b.name,sx,sy+1)})}
+ ctx.restore()}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+let lastT=performance.now(),animTime=0;
+function frame(now){
+ const dt=Math.min(50,now-lastT);lastT=now;if(!paused)animTime+=dt;
+ if(camT){const k=Math.min(1,(now-camT.t)/650),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;cam={x:camT.from.x+(camT.to.x-camT.from.x)*e,y:camT.from.y+(camT.to.y-camT.from.y)*e,s:camT.from.s+(camT.to.s-camT.from.s)*e};if(k>=1)camT=null}
+ if(D){if(!paused)updateBots(dt,animTime);
+  ctx.setTransform(DPR*cam.s,0,0,DPR*cam.s,DPR*(viewW()/2-cam.x*cam.s),DPR*(viewH()/2+10-cam.y*cam.s));ctx.imageSmoothingEnabled=false;
+  drawWorld(animTime);drawLinks(animTime);drawBots(animTime);drawLabels()}
+ requestAnimationFrame(frame)}
+// ---------- карточки
+const card=document.getElementById('card');
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function closeCard(){card.style.display='none';sel=null;selRoom=null}
+function openRoom(rm){sel=null;selRoom=rm;viewIdx=rooms.indexOf(rm);setWhere();
+ const n=rm.bots.length,desk=rm.bots.filter(b=>b.st!=='today'||b.boss).length,busy=rm.bots.filter(b=>b.st==='busy').length,today=rm.bots.filter(b=>b.st==='busy'||b.st==='today').length;
+ let h=`<h2><span class="dot" style="background:${rm.color}"></span>${esc(rm.name)}</h2><div class="sub">${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня</div><div class="list">`;
+ rm.bots.slice().sort((a,b)=>(b.act.last||0)-(a.act.last||0)).forEach(b=>{h+=`<div data-s="${b.slug}"><span><span class="dot" style="background:${ST[b.st][0]};margin-right:7px"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}</span><span class="k">${fmtAgo(b.act.last)}</span></div>`});
+ h+=`</div><button class="back">Вернуться</button>`;card.innerHTML=h;card.style.display='block';
+ card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]));card.querySelector('.back').onclick=goAll;card.scrollTop=0;
+ const r=rm.r;fitInto(r.x*T,r.y*T,r.w*T,r.h*T)}
+function openBot(b,keep){
+ if(b.group)return openGroup(b);
+ sel=b;selRoom=b.room;if(!keep){viewIdx=rooms.indexOf(b.room);setWhere()}
+ const a=b.act,st=ST[b.st];
+ let h=`<h2><span class="dot" style="background:${st[0]}"></span>${esc(b.name)} ${b.test?'<span class="tag t">тест</span>':''}${b.boss?'<span class="tag">главный</span>':''}</h2><div class="sub">${esc(b.role)}</div>`;
+ h+=`<div class="row"><b>${st[1]}</b>${waiting(b)?' · ждёт ответа на входящее':''}</div>`;
+ h+=`<div class="row"><span class="k">Последняя активность:</span> ${fmtAgo(a.last)} (${fmtAbs(a.last)})</div>`;
+ h+=`<div class="row"><span class="k">Сообщений:</span> ${a.d1} за сутки · ${a.d7} за 7 дней · всего ${a.total}</div>`;
+ h+=`<div class="spark" title="14 дней">${a.days.map(v=>`<i style="height:${Math.max(2,Math.min(26,v?4+Math.log2(1+v)*3.5:2))}px;opacity:${v?.9:.18}"></i>`).join('')}</div><div class="k" style="font-size:11px">активность за 14 дней</div>`;
+ const rs=a.routines||[];
+ h+=`<div class="row"><span class="k">Рутины (по факту запусков):</span> `+(rs.length?rs.map(r=>`<span class="chip ${r.state==='работает'?'':'g'}">⏰ ~${r.time} · ${r.state} · последний ${fmtAbs(r.last)}</span>`).join(''):'регулярных автозапусков не видно')+`</div>`;
+ if(a.auto_runs7)h+=`<div class="row"><span class="k">Сам запускался за 7 дней:</span> ${a.auto_runs7} раз, последний ${fmtAbs(a.last_auto)}</div>`;
+ if(a.bg_stops)h+=`<div class="row">⚠️ Фоновых задач остановлено по таймауту за 7 дней: ${a.bg_stops}</div>`;
+ const t=b.tasks||{};const tt=(t.need_you||0)+(t.waiting||0)+(t.in_work||0);
+ h+=`<div class="row"><span class="k">Задачи в трекере${D.tracker&&D.tracker.as_of?' (на '+fmtAbs(Date.parse(D.tracker.as_of))+')':''}:</span> `+(tt||t.postponed?`${t.need_you?'нужно от тебя '+t.need_you+' · ':''}${t.waiting?'ждёт других '+t.waiting+' · ':''}${t.in_work?'в работе '+t.in_work+' · ':''}${t.postponed?'отложено '+t.postponed:''}`.replace(/ · $/,''):'нет')+`</div>`;
+ const mine=links.filter(l=>l.from===b.slug||l.to===b.slug);const peers={};
+ mine.forEach(l=>{const o=l.from===b.slug?l.to:l.from;const p=peers[o]||(peers[o]={o,out:0,inn:0,kind:l.kind,last:0});if(l.kind==='data'){p.kind='data';if(l.from===b.slug)p.out+=l.n;else p.inn+=l.n;p.last=Math.max(p.last,l.last||0)}});
+ const pl=Object.values(peers).sort((x,y)=>(y.out+y.inn)-(x.out+x.inn));
+ if(pl.length){h+=`<div class="row"><span class="k">Работает с (передачи за 30 дней: → от него, ← к нему):</span><br>`+pl.map(p=>{const ob=bySlug[p.o];
+  const lab=p.kind==='data'?[p.out?'→'+p.out:'',p.inn?'←'+p.inn:''].filter(Boolean).join(' '):(p.kind==='group'?'группа':'связь');return `<span class="chip ${p.kind==='group'?'g':''}" data-s="${p.o}">${esc(ob.name)} · ${lab}</span>`}).join('')+`</div>`}
+ if(b.slug==='whatsapp')h+=`<div class="row">🔒 Единственный бот с доступом к WhatsApp</div>`;
+ if(b.files)h+=`<div class="row"><span class="k">Файлов у бота:</span> ${b.files}</div>`;
+ h+=`<button class="back">Вернуться</button>`;card.innerHTML=h;card.style.display='block';
+ card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]));card.querySelector('.back').onclick=()=>{selRoom?openRoom(b.room):goAll()};
+ if(!keep){card.scrollTop=0;fitInto(b.desk.x-70,b.desk.y-45,140,75,3.6)}}
+function openGroup(g){sel=g;let h=`<h2><span class="dot" style="background:#ffd23f"></span>Группа ${esc(g.name)}</h2><div class="sub">Общий чат зон: участники пишут сводки</div>`;
+ h+=`<div class="row"><span class="k">Последняя активность:</span> ${fmtAgo(g.act.last)} (${fmtAbs(g.act.last)})</div><div class="row"><span class="k">Сообщений:</span> ${g.act.d1} за сутки · ${g.act.d7} за 7 дней</div>`;
+ h+=`<div class="row"><span class="k">Участники:</span><br>`+['director'].concat(g.members.filter(m=>m!=='director')).filter(m=>bySlug[m]).map(m=>`<span class="chip" data-s="${m}">${esc(bySlug[m].name)}</span>`).join('')+`</div><button class="back">Вернуться</button>`;
+ card.innerHTML=h;card.style.display='block';card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]));card.querySelector('.back').onclick=goAll;
+ fitInto(g.x-90,g.y-50,180,100,3)}
+function goAll(){closeCard();viewIdx=-1;setWhere();fitAll()}
+function setWhere(){document.getElementById('where').textContent=viewIdx<0?'Весь офис':rooms[viewIdx].name}
+// ---------- ввод
+let ptrs=new Map(),drag=null,moved=false,pinch=null;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=false;camT=null;
+ if(ptrs.size===1)drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};
+ if(ptrs.size===2){const p=[...ptrs.values()];pinch={d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y),s:cam.s};drag=null}});
+cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+ if(pinch&&ptrs.size===2){const p=[...ptrs.values()];const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);cam.s=Math.max(.3,Math.min(7,pinch.s*d/pinch.d));moved=true}
+ else if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>6)moved=true;if(moved){cam.x=drag.cx-dx/cam.s;cam.y=drag.cy-dy/cam.s}}});
+function up(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(ptrs.size===0){if(!moved)tap(e.clientX,e.clientY);drag=null}}
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);drag=null;pinch=null});
+cv.addEventListener('wheel',e=>{e.preventDefault();const[wx,wy]=s2w(e.clientX,e.clientY);const ns=Math.max(.3,Math.min(7,cam.s*Math.exp(-e.deltaY*.0015)));cam.x=wx-(e.clientX-viewW()/2)/ns;cam.y=wy-(e.clientY-viewH()/2-10)/ns;cam.s=ns;camT=null},{passive:false});
+function tap(x,y){if(!D)return;const[wx,wy]=s2w(x,y);const r=Math.max(12,16/cam.s);
+ let best=null,bd=1e9;bots.forEach(b=>{const d=Math.hypot(b.x-wx,b.y-12-wy);if(d<bd){bd=d;best=b}});
+ if(best&&bd<r)return openBot(best);
+ const g=bySlug['asset20'];if(g&&Math.hypot(g.x-wx,g.y-wy)<44)return openGroup(g);
+ const rm=rooms.find(rm=>wx>=rm.r.x*T&&wx<=(rm.r.x+rm.r.w)*T&&wy>=rm.r.y*T&&wy<=(rm.r.y+rm.r.h)*T);
+ if(rm)return openRoom(rm);goAll()}
+document.getElementById('prev').onclick=()=>{if(!rooms.length)return;viewIdx=viewIdx<=0?(viewIdx<0?rooms.length-1:-1):viewIdx-1;viewIdx<0?goAll():openRoom(rooms[viewIdx])};
+document.getElementById('next').onclick=()=>{if(!rooms.length)return;viewIdx=viewIdx>=rooms.length-1?-1:viewIdx+1;viewIdx<0?goAll():openRoom(rooms[viewIdx])};
+function zoom(k){camT={from:{...cam},to:{x:cam.x,y:cam.y,s:Math.max(.3,Math.min(7,cam.s*k))},t:performance.now()}}
+document.getElementById('zin').onclick=()=>zoom(1.4);document.getElementById('zout').onclick=()=>zoom(1/1.4);
+document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
+document.getElementById('links').onclick=e=>{showLinks=!showLinks;e.currentTarget.classList.toggle('on',showLinks)};
+const lg=document.getElementById('legend');lg.innerHTML=`<b>Как читать</b><br>💡 жёлтая лампочка: бот работает прямо сейчас (активность за 30 мин)<br>🚶 ходит по комнате: был активен сегодня<br>🪑 сидит за столом: активен на неделе<br>💤 Zz: спит больше недели<br>⏰ белые часы: есть регулярные автозапуски (рутины)<br>💬 облачко: пришло сообщение, ответа ещё нет<br><span style="color:#2a9fd6">━</span> передачи работы между ботами (толще — чаще)<br><span style="color:#999">┄</span> известная связь · <span style="color:#d4a000">┄</span> группа Asset 2.0<br><br>Нажми на комнату или бота. Данные собирает скрипт на компьютере бота, без ИИ.`;
+document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};
+lg.onclick=()=>lg.style.display='none';
+resize();load();setInterval(load,5*60e3);requestAnimationFrame(frame);
+</script>
+</body>
+</html>
