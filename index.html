@@ -36,6 +36,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 #card .tag.t{background:#ffe7c2;color:#9a5a00}
 .spark{display:flex;gap:2px;align-items:flex-end;height:26px;margin:4px 0 2px}
 .spark i{flex:1;background:#3a55d6;border-radius:2px 2px 0 0;min-height:2px}
+@media (max-width:440px){#where{min-width:78px;max-width:96px;font-size:12px}#bar{gap:4px;padding:5px}#bar button{min-width:36px;padding:0 7px}}
 #err{position:fixed;inset:auto 0 50% 0;text-align:center;color:#ff9b9b;display:none;z-index:9}
 </style>
 </head>
@@ -47,7 +48,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="bar">
  <button id="prev" aria-label="Назад">‹</button><div id="where">Весь офис</div><button id="next" aria-label="Вперёд">›</button>
  <button id="zout" aria-label="Отдалить">−</button><button id="zin" aria-label="Приблизить">+</button>
- <button id="pause" aria-label="Пауза">❚❚</button>
+ <button id="pause" aria-label="Пауза">❚❚</button><button id="snd" aria-label="Звук">🔇</button>
 </div>
 <div id="card"></div>
 <div id="err"></div>
@@ -320,7 +321,7 @@ function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);
 let lastT=performance.now();
 function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
  if(camT){const k=Math.min(1,(now-camT.t)/650),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;cam={x:camT.from.x+(camT.to.x-camT.from.x)*e,y:camT.from.y+(camT.to.y-camT.from.y)*e,s:camT.from.s+(camT.to.s-camT.from.s)*e};if(k>=1)camT=null}
- if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt))}
+ if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));audioTick(dt)}
   ctx.setTransform(DPR*cam.s,0,0,DPR*cam.s,DPR*(vw()/2-cam.x*cam.s),DPR*(vh()/2-cam.y*cam.s));ctx.imageSmoothingEnabled=false;
   drawWorld();drawScene();drawLabels()}
  requestAnimationFrame(frame)}
@@ -370,6 +371,65 @@ function openBot(b,keep){sel=b;selZone=zoneById[b.zone];if(!keep){viewIdx=zones.
  if(!keep)fitInto(b.sit.x-80,b.sit.y-60,160,90,4)}
 function goAll(){closeCard();viewIdx=-1;setWhere();fitAll()}
 function setWhere(){document.getElementById('where').textContent=viewIdx<0?'Весь офис':(zones[viewIdx].kind==='cabinet'?'Кабинет директора':zones[viewIdx].name)}
+
+// ---------- звук: всё синтезируется Web Audio API, без файлов
+const SND={ctx:null,master:null,pre:null,an:null,noise:null,level:+(localStorage.getItem('botOfficeSound')||0),tone:null,keys:0,keyWin:0,lounge:0,sleepers:[]};
+const LEVELS=[0,.35,.65,1],ICON=['🔇','🔈','🔉','🔊'],LNAME=['звук выключен','тихо','средне','погромче'];
+function sndInit(){if(SND.ctx)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C();SND.ctx=c;
+ const comp=c.createDynamicsCompressor();comp.threshold.value=-24;comp.knee.value=12;comp.ratio.value=6;comp.attack.value=.005;comp.release.value=.25;
+ SND.master=c.createGain();SND.master.gain.value=0;SND.pre=c.createGain();SND.pre.gain.value=.9;SND.pre.connect(comp);comp.connect(SND.master);SND.master.connect(c.destination);
+ SND.an=c.createAnalyser();SND.an.fftSize=512;SND.master.connect(SND.an);
+ const len=c.sampleRate*2,buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;SND.noise=buf;
+ // фон помещения: очень тихий низкий шум
+ const src=c.createBufferSource();src.buffer=buf;src.loop=true;src.playbackRate.value=.5;const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=180;const g=c.createGain();g.gain.value=.05;src.connect(lp);lp.connect(g);g.connect(SND.pre);src.start();SND.tone=g}
+function sndApply(){const on=SND.level>0&&!document.hidden;if(SND.level>0)sndInit();if(!SND.ctx)return;const c=SND.ctx;
+ if(on&&c.state!=='running')c.resume();SND.master.gain.cancelScheduledValues(c.currentTime);SND.master.gain.setTargetAtTime(on?LEVELS[SND.level]:0,c.currentTime,.25);
+ if(!on)setTimeout(()=>{if((SND.level===0||document.hidden)&&c.state==='running')c.suspend()},900)}
+function sndBtn(){const b=document.getElementById('snd');b.textContent=ICON[SND.level];b.classList.toggle('on',SND.level>0);b.title=LNAME[SND.level]}
+document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;localStorage.setItem('botOfficeSound',SND.level);sndInit();sndApply();sndBtn()};
+document.addEventListener('visibilitychange',sndApply);
+// при сохранённом «включено» браузер требует жест: включаем по первому касанию
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(){if(SND.level>0){sndInit();sndApply()}removeEventListener(ev,f,true)},true));
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function spatial(wx,wy){const[sx,sy]=w2s(wx,wy);const w=vw(),h=vh();const pan=Math.max(-1,Math.min(1,(sx-w/2)/(w/2)))*.7;
+ const off=Math.max(0,Math.abs(sx-w/2)-w/2)+Math.max(0,Math.abs(sy-h/2)-h/2);const dist=Math.hypot(sx-w/2,sy-h/2)/Math.max(w,h);
+ const zoom=Math.min(1.25,.65+cam.s*.15);return{pan,g:zoom/(1+dist*1.2)/(1+off/150)}}
+function out(c,pan){const p=c.createStereoPanner?c.createStereoPanner():null;if(p){p.pan.value=pan;p.connect(SND.pre);return p}return SND.pre}
+function burst(t,{f,q=1.2,type='bandpass',dur=.03,g=.05,pan=0,att=.002,rate=1}){const c=SND.ctx,src=c.createBufferSource();src.buffer=SND.noise;src.playbackRate.value=rate;
+ const fl=c.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const e=c.createGain();e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(g,t+att);e.gain.exponentialRampToValueAtTime(.0001,t+dur);
+ src.connect(fl);fl.connect(e);e.connect(out(c,pan));src.start(t,Math.random()*1.5,dur+.05)}
+function keyClick(b){const sp=spatial(b.x,b.y);if(sp.g<.08)return;const t=SND.ctx.currentTime+.01;const big=Math.random()<.08;
+ burst(t,{f:big?rnd(700,950):rnd(2600,4200),q:big?1:rnd(1,2),dur:big?.05:rnd(.018,.03),g:(big?.05:.035)*rnd(.6,1.1)*sp.g,pan:sp.pan});
+ burst(t+.004,{f:rnd(1200,1600),q:3,dur:.012,g:.012*sp.g,pan:sp.pan})}
+function step(b){const sp=spatial(b.x,b.y);if(sp.g<.08)return;const t=SND.ctx.currentTime+.01;burst(t,{type:'lowpass',f:rnd(300,520),q:.7,dur:rnd(.05,.08),g:.06*rnd(.7,1)*sp.g,pan:sp.pan,att:.004});
+ burst(t+.01,{f:rnd(1800,2600),q:2,dur:.02,g:.006*sp.g,pan:sp.pan})}
+function breath(b,snore){const c=SND.ctx,sp=spatial(b.x,b.y);if(sp.g<.1)return;const t=c.currentTime+.02,inh=rnd(1.1,1.6),exh=rnd(1.5,2.2),pan=sp.pan,G=sp.g*.55;
+ const src=c.createBufferSource();src.buffer=SND.noise;src.loop=true;const fl=c.createBiquadFilter();fl.type='bandpass';fl.Q.value=.8;fl.frequency.setValueAtTime(rnd(450,650),t);fl.frequency.linearRampToValueAtTime(rnd(750,950),t+inh);fl.frequency.linearRampToValueAtTime(rnd(400,550),t+inh+exh);
+ const e=c.createGain();e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(.022*G,t+inh*.8);e.gain.linearRampToValueAtTime(.004*G,t+inh+.1);e.gain.linearRampToValueAtTime(.016*G,t+inh+.5);e.gain.linearRampToValueAtTime(0,t+inh+exh);
+ src.connect(fl);fl.connect(e);e.connect(out(c,pan));src.start(t,Math.random());src.stop(t+inh+exh+.1);
+ if(snore){const o=c.createOscillator();o.type='sawtooth';o.frequency.value=rnd(70,105);const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=260;const am=c.createGain();am.gain.setValueAtTime(0,t);am.gain.linearRampToValueAtTime(0,t+inh*.4);am.gain.linearRampToValueAtTime(.012*G,t+inh*.85);am.gain.linearRampToValueAtTime(0,t+inh+.05);
+  o.connect(lp);lp.connect(am);am.connect(out(c,pan));o.start(t);o.stop(t+inh+.2)}}
+function loungeAmbience(){const z=zoneById.lounge;if(!z)return;const c=SND.ctx,sp=spatial((z.x+z.w-1)*T,(z.y+1)*T);if(sp.g<.08)return;const t=c.currentTime+.05;
+ if(Math.random()<.45){ // кофемашина: тихое жужжание и струйка
+  const o=c.createOscillator();o.type='sawtooth';o.frequency.value=rnd(120,150);const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=500;const g=c.createGain();const d=rnd(1.2,1.8);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.008*sp.g,t+.25);g.gain.linearRampToValueAtTime(.006*sp.g,t+d);g.gain.linearRampToValueAtTime(0,t+d+.3);o.connect(lp);lp.connect(g);g.connect(out(c,sp.pan));o.start(t);o.stop(t+d+.4);
+  const s=c.createBufferSource();s.buffer=SND.noise;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=rnd(2500,3500);f.Q.value=.9;const e=c.createGain();const t2=t+d+.4,d2=rnd(1.6,2.4);
+  e.gain.setValueAtTime(0,t2);e.gain.linearRampToValueAtTime(.01*sp.g,t2+.3);e.gain.linearRampToValueAtTime(0,t2+d2);s.connect(f);f.connect(e);e.connect(out(c,sp.pan));s.start(t2,Math.random());s.stop(t2+d2+.1)}
+ else{ // звон чашки
+  const n=Math.random()<.5?1:2;for(let k=0;k<n;k++){const tt=t+k*rnd(.12,.25);[rnd(2400,3200),rnd(4800,5600)].forEach((fr,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;const g=c.createGain();g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime((i?.004:.01)*sp.g,tt+.003);g.gain.exponentialRampToValueAtTime(.0001,tt+rnd(.25,.45));o.connect(g);g.connect(out(c,sp.pan));o.start(tt);o.stop(tt+.5)})}}}
+function audioTick(dt){if(!SND.ctx||SND.level===0||document.hidden||SND.ctx.state!=='running'||paused)return;const now=animTime;
+ SND.keyWin-=dt;if(SND.keyWin<=0){SND.keyWin=1000;SND.keys=0}
+ bots.forEach(b=>{
+  if(b.mode==='go'||b.mode==='back'){b.stepAcc=(b.stepAcc||0)+dt;if(b.stepAcc>rnd(300,360)){b.stepAcc=0;step(b)}return}
+  if(b.mode!=='seat'||b.place!=='desk')return;const lvl=b.st==='busy'?2:b.st==='today'?1:b.st==='week'?0:-1;if(lvl<0)return;
+  if(!b.ty||now>=b.ty.until){const on=!(b.ty&&b.ty.on);const P=[[.6,1.5,15e3,40e3],[1,3,4e3,12e3],[1.5,5,1.5e3,4e3]][lvl];b.ty={on,until:now+(on?rnd(P[0],P[1])*1000:rnd(P[2],P[3])),next:now}}
+  if(b.ty.on&&now>=b.ty.next){b.ty.next=now+rnd(lvl===2?70:95,lvl===2?170:230)*(Math.random()<.1?3:1);if(SND.keys<22){SND.keys++;keyClick(b)}}});
+ // дыхание и сопение: до 3 ближайших спящих
+ const sl=bots.filter(b=>b.st==='sleep'&&b.mode==='seat');sl.forEach(b=>{if(!b.br)b.br=now+rnd(0,4000)});
+ sl.sort((a,b)=>spatial(b.x,b.y).g-spatial(a.x,a.y).g).slice(0,3).forEach(b=>{if(now>=b.br){b.br=now+rnd(3600,5200);breath(b,Math.random()<.35)}});
+ if(!SND.lounge)SND.lounge=now+rnd(8e3,15e3);if(now>=SND.lounge){SND.lounge=now+rnd(25e3,60e3);loungeAmbience()}}
+sndBtn();
+window.__sndLevel=()=>{if(!SND.an)return 0;const a=new Float32Array(SND.an.fftSize);SND.an.getFloatTimeDomainData(a);let m=0;for(const v of a)m=Math.max(m,Math.abs(v));return m};
 // ---------- ввод
 let ptrs=new Map(),drag=null,moved=false,pinch=null;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=false;camT=null;
@@ -392,7 +452,7 @@ function zoom(k){camT={from:{...cam},to:{x:cam.x,y:cam.y,s:Math.max(.3,Math.min(
 document.getElementById('zin').onclick=()=>zoom(1.4);document.getElementById('zout').onclick=()=>zoom(1/1.4);
 document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
 const lg=document.getElementById('legend');
-lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>Нажми на бота или зону, чтобы увидеть детали.`;
+lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: тихий живой офис (клавиатуры, шаги, сопение, кофемашина). Нажимай, чтобы выбрать громкость.<br>Нажми на бота или зону, чтобы увидеть детали.`;
 document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};lg.onclick=()=>lg.style.display='none';
 function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;if(pickLayout()&&D){build();closeCard();viewIdx=-1;setWhere()}if(!camT&&viewIdx<0&&!sel)fitAll(true)}
 addEventListener('resize',resize);pickLayout();resize();load();setInterval(load,5*60e3);requestAnimationFrame(frame);
