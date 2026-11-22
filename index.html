@@ -56,7 +56,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 const T=16,DPR=Math.min(window.devicePixelRatio||1,3);
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),card=document.getElementById('card');
 let D=null,LAY=null,L=null,W=24,H=36,zones=[],zoneById={},bots=[],bySlug={},links=[];
-let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool={};
+let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool={},bench=[],lounge=[],sofas=[];
 let cam={x:200,y:300,s:1},camT=null,paused=false,sel=null,selZone=null,viewIdx=-1,animTime=0,schedT=0;
 // ---------- время/формат
 const pad=n=>String(n).padStart(2,'0');
@@ -70,13 +70,15 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','
 function status(b){const last=b.act.last||b.last_file||0,age=Date.now()-last;if(last&&age<30*6e4)return 'busy';if(last&&age<864e5)return 'today';if(last&&age<7*864e5)return 'week';return 'sleep'}
 const ST={busy:['#ffc400','Работает сейчас'],today:['#36c26b','Был активен сегодня'],week:['#5b8cff','Активен на этой неделе'],sleep:['#9aa0b5','Спит больше недели']};
 const waiting=b=>b.act.waiting&&b.act.last_user&&Date.now()-b.act.last_user<3*864e5;
+const waitOn=b=>!b.boss&&b.act.asks_since&&Date.now()-b.act.asks_since<7*864e5;
+function fmtSince(ms){const d=ast(ms),hm=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());return d.toISOString().slice(0,10)===ast(Date.now()).toISOString().slice(0,10)?hm:pad(d.getUTCDate())+'.'+pad(d.getUTCMonth()+1)+' '+hm}
 // ---------- раскладка
 function pickLayout(){const k=innerWidth/innerHeight<1.3?'tall':'wide';if(k===LAY)return false;LAY=k;return true}
 const key=(x,y)=>y*W+x;
 function block(x,y){if(x>=0&&y>=0&&x<W&&y<H)blocked[key(x,y)]=1}
 const free=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&!blocked[key(x,y)];
 function build(){
- if(!D)return;L=D.layouts[LAY];W=L.W;H=L.H;blocked=new Uint8Array(W*H);seatSet=new Set();reserved=new Set();decor=[];
+ if(!D)return;L=D.layouts[LAY];W=L.W;H=L.H;blocked=new Uint8Array(W*H);seatSet=new Set();reserved=new Set();decor=[];bench=[];lounge=[];sofas=[];
  for(let x=0;x<W;x++){block(x,0);block(x,H-1)}for(let y=0;y<H;y++){block(0,y);block(W-1,y)}
  zones=D.zones.filter(z=>L.zones[z.id]).map(z=>{const[x,y,w,h]=L.zones[z.id];return Object.assign({},z,{x,y,w,h,bots:[]})});zoneById={};zones.forEach(z=>zoneById[z.id]=z);
  const prev={};bots.forEach(b=>prev[b.slug]=b);
@@ -99,6 +101,11 @@ function build(){
    z.bossSeat={x:seats[3][0],y:seats[3][1]};
    block(z.x+z.w-1,z.y);decor.push({t:'plant',x:z.x+z.w-1,y:z.y});block(z.x,z.y);decor.push({t:'plant',x:z.x,y:z.y});
    decor.push({t:'board',x:z.x+2,y:z.y});block(z.x+2,z.y);block(z.x+3,z.y);
+  }else if(z.kind==='lounge'){
+   const rowsY=z.h>=5?[z.y+1,z.y+3]:[z.y+1];
+   rowsY.forEach((ry,ri)=>{for(let sx=z.x+1+ri;sx<=z.x+z.w-2;sx+=2){lounge.push({x:sx,y:ry});sofas.push({x:sx,y:ry,w:1})}});
+   if(z.h>=5)for(let tx=z.x+3;tx<=z.x+z.w-4;tx+=6){block(tx,z.y+2);block(tx+1,z.y+2);decor.push({t:'ctable',x:tx,y:z.y+2})}
+   block(z.x+z.w-1,z.y+1);decor.push({t:'coffee',x:z.x+z.w-1,y:z.y+1});
   }else{
    const n=z.bots.length,cols=Math.max(1,Math.min(n,Math.floor(z.w/4))),cw=z.w/cols;
    z.bots.forEach((b,i)=>{const c=i%cols,r=Math.floor(i/cols);const dx=Math.round(z.x+cw*c+(cw-2)/2),sy=z.y+2+r*4;
@@ -110,12 +117,14 @@ function build(){
   }
  });
  // кулер и диван в свободных местах
- const extra=LAY==='wide'?[{t:'sofa',x:14,y:18,w:3},{t:'cooler',x:24,y:18,w:1},{t:'plant',x:12,y:19,w:1},{t:'plant',x:33,y:19,w:1},{t:'printer',x:19,y:18,w:2}]:[{t:'cooler',x:22,y:9,w:1},{t:'printer',x:12,y:9,w:2}];
+ if(L.bench)for(let i=0;i<L.bench[2];i+=2)bench.push({x:L.bench[0]+i,y:L.bench[1]});
+ const extra=LAY==='wide'?[]:[{t:'cooler',x:22,y:9,w:1}];
  extra.forEach(e=>{let ok=true;for(let i=0;i<e.w;i++)if(!free(e.x+i,e.y))ok=false;if(ok){for(let i=0;i<e.w;i++)block(e.x+i,e.y);decor.push(e)}});
  bots.forEach(b=>{seatSet.add(key(b.seat.x,b.seat.y));const p=prev[b.slug];
-  if(p&&p.mode&&p.mode!=='seat'){Object.assign(b,{x:b.sit.x,y:b.sit.y,mode:'seat'})}else{b.x=b.sit.x;b.y=b.sit.y;b.mode='seat'}b.talkWith=null;b.lock=0});
+  b.x=b.sit.x;b.y=b.sit.y;b.mode='seat';b.talkWith=null;b.lock=0;b.deskSeat=b.seat;b.deskSit=b.sit;b.place='desk';b.slot=null});
+ bench.concat(lounge).forEach(t=>seatSet.add(key(t.x,t.y)));
  Object.values(zoneById).forEach(z=>{if(z.bossSeat)seatSet.add(key(z.bossSeat.x,z.bossSeat.y))});
- computeCand();
+ computeCand();assignPlaces(true);
 }
 function computeCand(){
  // кандидаты визитов из реальных сообщений между ботами
@@ -127,6 +136,15 @@ function computeCand(){
  const g=(D.groups||[]).find(g=>g.slug==='asset20');
  if(g&&g.act&&g.act.last&&bySlug.director){const age=(Date.now()-g.act.last)/36e5;if(age<24*7)cand.push({v:'director',t:'asset20',w:age<24?6:2,n:g.act.d7,last:g.act.last})}
 }
+function desired(b){if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(b.st==='sleep')return 'lounge';return 'desk'}
+function assignPlaces(instant){const used={bench:new Set(),lounge:new Set()};
+ bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
+ bots.forEach(b=>{const d=desired(b);if(d===b.place)return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
+  if(d!=='desk'){const arr=d==='bench'?bench:lounge;const i=arr.findIndex((t,k)=>!used[d].has(k));if(i>=0){used[d].add(i);place=d;slot=i;seat={x:arr[i].x,y:arr[i].y};sit=anchor(arr[i].x,arr[i].y)}}
+  if(place===b.place)return;const from=b.seat;b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
+  if(instant){b.x=sit.x;b.y=sit.y;b.mode='seat';return}
+  if(b.mode!=='seat')return;const path=bfs(from.x,from.y,[[seat.x,seat.y]]);b.pts=path?path.map(p=>anchor(p[0],p[1])):[];b.pts.push({x:sit.x,y:sit.y});b.mode='back'})}
+const standOf=t=>t.place==='desk'?t.stand:nbrs(t.seat.x,t.seat.y);
 function nbrs(x,y){return[[x-1,y],[x+1,y],[x,y-1],[x,y+1],[x-1,y+1],[x+1,y+1],[x-1,y-1],[x+1,y-1]]}
 function bfs(sx,sy,goals){const gs=new Set(goals.map(g=>key(g[0],g[1])));const prev=new Int32Array(W*H).fill(-1);const q=[key(sx,sy)];prev[q[0]]=q[0];
  for(let i=0;i<q.length;i++){const k=q[i];if(gs.has(k)&&i>0){const path=[];let c=k;while(c!==q[0]){path.push([c%W,(c/W)|0]);c=prev[c]}return path.reverse()}
@@ -142,7 +160,7 @@ function schedule(){
  startVisit(pick)}
 function startVisit(c){const v=bySlug[c.v];let goals,sitAt=null,t=null;
  if(c.t==='asset20'){const z=zoneById.asset20;if(!z||reserved.has(key(z.bossSeat.x,z.bossSeat.y)))return;goals=[[z.bossSeat.x,z.bossSeat.y]];sitAt=z.bossSeat}
- else{t=bySlug[c.t];goals=t.stand.filter(([x,y])=>free(x,y)&&!seatSet.has(key(x,y))&&!reserved.has(key(x,y)))}
+ else{t=bySlug[c.t];goals=standOf(t).filter(([x,y])=>free(x,y)&&!seatSet.has(key(x,y))&&!reserved.has(key(x,y)))}
  if(!goals.length)return;const path=bfs(v.seat.x,v.seat.y,goals);pairCool[c.v+'>'+c.t]=animTime+9000;if(!path)return;
  const end=path[path.length-1];reserved.add(key(end[0],end[1]));
  v.pts=path.map(p=>anchor(p[0],p[1]));if(sitAt)v.pts[v.pts.length-1]=anchor(sitAt.x,sitAt.y);
@@ -152,7 +170,7 @@ function stepBot(b,dt){
  if(b.mode==='talk'){b.talkT-=dt;if(b.talkT<=0){const path=bfs(b.goal[0],b.goal[1],[[b.seat.x,b.seat.y]]);reserved.delete(key(b.goal[0],b.goal[1]));if(b.target)b.target.lock--;
    if(b.target)b.target.talkWith=null;b.pts=path?path.map(p=>anchor(p[0],p[1])):[];b.pts.push({x:b.sit.x,y:b.sit.y});b.mode='back'}return}
  const sp=0.07*dt;let left=sp;while(left>0&&b.pts.length){const p=b.pts[0],d=Math.hypot(p.x-b.x,p.y-b.y);if(d<=left){b.x=p.x;b.y=p.y;left-=d;b.pts.shift()}else{b.x+=(p.x-b.x)/d*left;b.y+=(p.y-b.y)/d*left;b.face=p.x<b.x-0.1?-1:(p.x>b.x+0.1?1:b.face);left=0}}
- if(!b.pts.length){if(b.mode==='go'){b.mode='talk';b.talkT=b.c.t==='asset20'?5200:2800;if(b.target)b.target.talkWith=b}else{b.mode='seat'}}
+ if(!b.pts.length){if(b.mode==='back'&&Math.hypot(b.sit.x-b.x,b.sit.y-b.y)>T){const tx=Math.floor(b.x/T),ty=Math.floor(b.y/T);const path=bfs(tx,ty,[[b.seat.x,b.seat.y]]);if(path&&path.length){b.pts=path.map(p=>anchor(p[0],p[1]));b.pts.push({x:b.sit.x,y:b.sit.y});return}}if(b.mode==='go'){b.mode='talk';b.talkT=b.c.t==='asset20'?5200:2800;if(b.target)b.target.talkWith=b}else{b.mode='seat'}}
 }
 // ---------- рисование: спрайты
 const BASE=[
@@ -237,6 +255,8 @@ function drawDecor(d){const x=d.x*T,y=d.y*T;
  if(d.t==='sofa'){R(x,y-2,48,16,'#5c6bc0');R(x,y-2,48,5,'#7986cb');R(x-2,y,4,14,'#3f51b5');R(x+46,y,4,14,'#3f51b5')}
  if(d.t==='cooler'){R(x+4,y-8,8,8,'#b3e5fc');R(x+3,y,10,14,'#eceff1');R(x+6,y+3,4,2,'#1e88e5')}
  if(d.t==='printer'){R(x+2,y-2,28,14,'#cfd8dc');R(x+5,y-6,22,4,'#fff');R(x+4,y+4,24,2,'#455a64')}
+ if(d.t==='ctable'){R(x+2,y+2,28,9,'#6d4c41');R(x+2,y+2,28,2,'#8d6e63');R(x+7,y-1,4,4,'#fff');R(x+8,y-1,2,1,'#6d4c41');R(x+19,y-1,4,4,'#fff');R(x+20,y-1,2,1,'#6d4c41');R(x+4,y+11,2,4,'#4e342e');R(x+26,y+11,2,4,'#4e342e')}
+ if(d.t==='coffee'){R(x+2,y-12,12,22,'#37474f');R(x+2,y-12,12,3,'#546e7a');R(x+4,y-6,8,5,'#263238');R(x+6,y,5,5,'#fff');R(x+7,y,3,1,'#6d4c41');R(x+11,y-10,2,2,'#ff5252')}
  if(d.t==='board'){R(x,y-8,32,14,'#fafafa');R(x,y-8,32,2,'#90a4ae');R(x+3,y-4,10,1,'#e53935');R(x+3,y-1,16,1,'#1e88e5');R(x+20,y-5,8,6,'#ffd54f')}}
 function drawWorld(){
  // пол open space
@@ -256,6 +276,8 @@ function drawWorld(){
  // стулья
  bots.forEach(b=>{if(b.kind==='desk'||b.kind==='table'){R(b.sit.x-6,b.sit.y-9,12,10,'#37474f');R(b.sit.x-6,b.sit.y-12,12,4,'#455a64')}});
  const a=zoneById.asset20;if(a){const bs=a.bossSeat;R((bs.x+.5)*T-6,(bs.y+.85)*T-9,12,10,'#37474f')}
+ if(bench.length){const x=bench[0].x*T,y=bench[0].y*T,w=(bench[bench.length-1].x-bench[0].x+1)*T;R(x-2,y-6,w+4,4,'#8d6e63');R(x-2,y+4,w+4,7,'#ffb300');R(x-2,y+4,w+4,2,'#ffd54f');R(x,y+11,3,4,'#5d4037');R(x+w-3,y+11,3,4,'#5d4037');R(x+w/2-1,y+11,3,4,'#5d4037')}
+ sofas.forEach(f=>{const x=f.x*T,y=f.y*T;R(x-2,y-8,T+4,10,'#6d4c9f');R(x-2,y-8,T+4,2,'#8e6cc4');R(x,y+2,T,10,'#9575cd');R(x-5,y-2,5,14,'#5e35b1');R(x+T,y-2,5,14,'#5e35b1')});
 }
 function rrp(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
 function bulb(x,y){const p=.5+.5*Math.sin(animTime/260);ctx.save();ctx.shadowColor='#ffd23f';ctx.shadowBlur=8+8*p;ctx.fillStyle='#ffd23f';ctx.beginPath();ctx.arc(x,y,4+p,0,7);ctx.fill();ctx.restore();R(x-2,y+4,4,3,'#999')}
@@ -269,10 +291,11 @@ function drawScene(){
  items.sort((p,q)=>p.y-q.y).forEach(i=>i.f());
  // значки поверх
  bots.forEach(b=>{const hy=b.y-30;
-  if(b.st==='busy')bulb(b.x,hy-4);
+  if(waitOn(b)&&b.mode==='seat'){const p=.5+.5*Math.sin(animTime/300);ctx.save();ctx.shadowColor='#ffab00';ctx.shadowBlur=6+6*p;ctx.fillStyle='#ffab00';ctx.beginPath();ctx.arc(b.x,hy-4,6+p,0,7);ctx.fill();ctx.restore();ctx.fillStyle='#3e2723';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText('?',b.x,hy-1);ctx.textAlign='left'}
+  else if(b.st==='busy')bulb(b.x,hy-4);
   else if(b.st==='sleep'&&b.mode==='seat'){ctx.fillStyle='#3a4a8a';ctx.font='bold 9px monospace';const o=(animTime/600)%3;ctx.fillText('z',b.x+8,hy+6-o);ctx.fillText('Z',b.x+12,hy-2-o)}
   if(b.mode==='talk'){bubble(b.x,hy-2);if(b.target)bubble(b.target.x+10,b.target.y-34)}
-  if(waiting(b)&&b.mode==='seat'&&b.st!=='busy'){R(b.x+8,hy+2,10,7,'#fff');ctx.strokeStyle='#c62828';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(b.x+8,hy+2);ctx.lineTo(b.x+13,hy+6);ctx.lineTo(b.x+18,hy+2);ctx.stroke()}
+  if(waiting(b)&&b.mode==='seat'&&b.st!=='busy'&&b.place!=='bench'){R(b.x+8,hy+2,10,7,'#fff');ctx.strokeStyle='#c62828';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(b.x+8,hy+2);ctx.lineTo(b.x+13,hy+6);ctx.lineTo(b.x+18,hy+2);ctx.stroke()}
   if((b.act.routines||[]).some(r=>r.state==='работает')&&b.mode==='seat'){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.x-11,hy+9,4,0,7);ctx.fill();ctx.strokeStyle='#3047b8';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(b.x-11,hy+9);ctx.lineTo(b.x-11,hy+6.5);ctx.moveTo(b.x-11,hy+9);ctx.lineTo(b.x-9,hy+9);ctx.stroke()}
   if(sel&&sel.slug===b.slug){ctx.strokeStyle='#ff3d00';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(b.x,b.y,11,4.5,0,0,7);ctx.stroke()}
  })}
@@ -287,8 +310,10 @@ function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.font='700 '+(fz+.5)+'px -apple-system,Roboto,sans-serif';const tw=ctx.measureText(txt).width+22;if(z.kind==='cabinet')sx-=tw/2;
   if(z.kind==='cabinet'){ctx.fillStyle='#ffd54f';rrp(sx,sy-10,tw,20,4);ctx.fill();ctx.strokeStyle='#8d6e00';ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle='#3e2723';ctx.textBaseline='middle';ctx.fillText(txt,sx+11,sy+.5);return}
   ctx.fillStyle='rgba(255,255,255,.96)';rrp(sx,sy-1,tw,19,9.5);ctx.fill();ctx.fillStyle=z.color;ctx.beginPath();ctx.arc(sx+9,sy+8.5,4,0,7);ctx.fill();ctx.fillStyle='#1b2040';ctx.textBaseline='middle';ctx.fillText(txt,sx+16,sy+9)});
+ if(bench.length){const n=bots.filter(b=>b.place==='bench').length;const txt='Ждут тебя'+(n?' · '+n:'');ctx.font='800 '+(fz+.5)+'px -apple-system,Roboto,sans-serif';const tw=ctx.measureText(txt).width+18;const bx0=bench[0].x,bx1=bench[bench.length-1].x+1;const[sx,sy]=LAY==='tall'?w2s((bx0+bx1)/2*T,bench[0].y*T-T*1.75):w2s(bx1*T+T*2.6,bench[0].y*T+T*.5);
+  ctx.fillStyle='#ffab00';rrp(sx-tw/2,sy-10,tw,20,10);ctx.fill();ctx.fillStyle='#3e2723';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(txt,sx,sy+.5);ctx.textAlign='left'}
  ctx.font='700 '+fz+'px -apple-system,Roboto,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
- bots.slice().sort((a,b)=>a.y-b.y).forEach(b=>{const[sx,sy]=w2s(b.x,b.y+3);const t=b.short||b.name;const tw=ctx.measureText(t).width+8;
+ bots.slice().sort((a,b)=>a.y-b.y).forEach(b=>{const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y+3);const sy=sy0+lv*(fz+6);const t=b.short||b.name;const tw=ctx.measureText(t).width+8;
   ctx.fillStyle=b.st==='busy'?'rgba(70,52,0,.9)':'rgba(16,20,40,.82)';rrp(sx-tw/2,sy,tw,fz+5,5);ctx.fill();ctx.fillStyle=b.st==='busy'?'#ffd54f':'#fff';ctx.fillText(t,sx,sy+(fz+5)/2+.5)});
  ctx.textAlign='left'}
 // ---------- цикл
@@ -307,24 +332,28 @@ function fitAll(inst){fitInto(0,0,W*T,H*T,6,inst)}
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const keep={...cam};const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();cam=keep}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
   stats()}catch(e){if(!D){const el=document.getElementById('err');el.style.display='block';el.textContent='Не удалось загрузить данные'}}}
-function rebuildCand(){computeCand()}
+function rebuildCand(){computeCand();assignPlaces(false)}
 function stats(){if(!D)return;const busy=bots.filter(b=>b.st==='busy').length,today=bots.filter(b=>b.st==='busy'||b.st==='today').length,walk=bots.filter(b=>b.mode!=='seat').length;
- document.getElementById('stats').textContent=`Зон ${zones.length} • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk}`;
+ const wt=bots.filter(waitOn).length,rest=bots.filter(b=>b.place==='lounge').length;
+ document.getElementById('stats').innerHTML=`<b style="color:#ffb300">Ждут тебя ${wt}</b> • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk} • Отдыхают ${rest}`;
  document.getElementById('upd').textContent='Данные: '+fmtAbs(D.generated)+' (Астана), обновляются сами'}
 setInterval(stats,1000);
 // ---------- карточки
 function closeCard(){card.style.display='none';sel=null;selZone=null}
 function showCard(h){card.innerHTML=h;card.style.display='block';card.scrollTop=0;card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]))}
 function openZone(z){sel=null;selZone=z;viewIdx=zones.indexOf(z);setWhere();
- const n=z.bots.length,busy=z.bots.filter(b=>b.st==='busy').length,today=z.bots.filter(b=>b.st==='busy'||b.st==='today').length,desk=z.bots.filter(b=>b.mode==='seat').length;
- let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня</div>`;
+ const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.bots;
+ const n=zb.length,busy=zb.filter(b=>b.st==='busy').length,today=zb.filter(b=>b.st==='busy'||b.st==='today').length,desk=zb.filter(b=>b.place==='desk'&&b.mode==='seat').length,rest=zb.filter(b=>b.place==='lounge').length,wt=zb.filter(b=>b.place==='bench').length;
+ let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='lounge'?`Здесь спят боты, неактивные больше 7 дней: ${n}`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
  if(z.id==='asset20'){const g=(D.groups||[]).find(g=>g.slug==='asset20');h+=`<div class="row">Общий чат зон. Здесь сидят Дух, Тело и Бизнес; Директор подходит к столу за сводками.</div>`;if(g)h+=`<div class="row"><span class="k">Чат активен:</span> ${fmtAgo(g.act.last)} · ${g.act.d1} сообщ. за сутки · ${g.act.d7} за 7 дней</div>`}
- h+='<div class="list">';z.bots.slice().sort((a,b)=>(b.act.last||0)-(a.act.last||0)).forEach(b=>{h+=`<div data-s="${b.slug}"><span><span class="dot" style="background:${ST[b.st][0]};margin-right:8px"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}</span><span class="k">${fmtAgo(b.act.last)}</span></div>`});
+ h+='<div class="list">';zb.slice().sort((a,b)=>(b.act.last||0)-(a.act.last||0)).forEach(b=>{h+=`<div data-s="${b.slug}"><span><span class="dot" style="background:${ST[b.st][0]};margin-right:8px"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}</span><span class="k">${fmtAgo(b.act.last)}</span></div>`});
  h+='</div><button class="back">Вернуться</button>';showCard(h);card.querySelector('.back').onclick=goAll;fitInto(z.x*T,z.y*T-8,z.w*T,z.h*T+8,4)}
 function openBot(b,keep){sel=b;selZone=zoneById[b.zone];if(!keep){viewIdx=zones.indexOf(selZone);setWhere()}
  const a=b.act,st=ST[b.st];
  let h=`<h2><span class="dot" style="background:${st[0]}"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}${b.boss?' <span class="tag">главный</span>':''}</h2><div class="sub">${esc(b.role)}</div>`;
- h+=`<div class="row"><b>${st[1]}</b>${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт к коллеге':''}</div>`;
+ if(waitOn(b))h+=`<div class="row" style="background:#fff3d6;border-radius:9px;padding:6px 9px"><b style="color:#a65f00">⏳ Ждёт твоего ответа с ${fmtSince(b.act.asks_since)}</b></div>`;
+ else if(b.act.asks_since&&!b.boss)h+=`<div class="row" style="color:#9aa0b5">Ждал ответа с ${fmtSince(b.act.asks_since)} (больше 7 дней, не учитывается)</div>`;
+ h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
  h+=`<div class="row"><span class="k">Последняя активность:</span> ${fmtAgo(a.last)} (${fmtAbs(a.last)})</div>`;
  h+=`<div class="row"><span class="k">Сообщений:</span> ${a.d1} за сутки · ${a.d7} за 7 дней · всего ${a.total}</div>`;
  h+=`<div class="spark">${a.days.map(v=>`<i style="height:${v?Math.min(26,4+Math.log2(1+v)*3.5):2}px;opacity:${v?.9:.18}"></i>`).join('')}</div><div class="k" style="font-size:11px">активность за 14 дней</div>`;
@@ -354,7 +383,7 @@ cv.addEventListener('wheel',e=>{e.preventDefault();const[wx,wy]=s2w(e.clientX,e.
 function tap(x,y){if(!D)return;const[wx,wy]=s2w(x,y);let best=null,bd=1e9;
  bots.forEach(b=>{const d=Math.hypot(b.x-wx,b.y-12-wy);if(d<bd){bd=d;best=b}});
  // подпись тоже кликабельна
- bots.forEach(b=>{const[sx,sy]=w2s(b.x,b.y+3);if(Math.abs(x-sx)<34&&y>sy-2&&y<sy+18){best=b;bd=0}});
+ bots.forEach(b=>{const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y+3);const sy=sy0+lv*(Math.max(9.5,Math.min(13,8+cam.s*1.6))+6);if(Math.abs(x-sx)<30&&y>sy-2&&y<sy+18){best=b;bd=0}});
  if(best&&bd<Math.max(14,18/cam.s))return openBot(best);
  const z=zones.find(z=>wx>=z.x*T&&wx<=(z.x+z.w)*T&&wy>=z.y*T&&wy<=(z.y+z.h)*T);if(z)return openZone(z);goAll()}
 document.getElementById('prev').onclick=()=>{viewIdx=viewIdx<=0?(viewIdx<0?zones.length-1:-1):viewIdx-1;viewIdx<0?goAll():openZone(zones[viewIdx])};
@@ -363,7 +392,7 @@ function zoom(k){camT={from:{...cam},to:{x:cam.x,y:cam.y,s:Math.max(.3,Math.min(
 document.getElementById('zin').onclick=()=>zoom(1.4);document.getElementById('zout').onclick=()=>zoom(1/1.4);
 document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
 const lg=document.getElementById('legend');
-lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>💤 Zz: спит больше недели.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>Нажми на бота или зону, чтобы увидеть детали.`;
+lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>Нажми на бота или зону, чтобы увидеть детали.`;
 document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};lg.onclick=()=>lg.style.display='none';
 function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;if(pickLayout()&&D){build();closeCard();viewIdx=-1;setWhere()}if(!camT&&viewIdx<0&&!sel)fitAll(true)}
 addEventListener('resize',resize);pickLayout();resize();load();setInterval(load,5*60e3);requestAnimationFrame(frame);
