@@ -504,10 +504,10 @@ function sndApply(){const on=SND.level>0&&!document.hidden;if(on)sndInit();if(!S
  if(SND.ctx){const c=SND.ctx;if(on&&c.state!=='running')c.resume();SND.gain.gain.cancelScheduledValues(c.currentTime);SND.gain.gain.setTargetAtTime(v,c.currentTime,.3)}else SND.el.volume=v;
  if(on){const p=SND.el.play();if(p&&p.catch)p.catch(()=>{})}else setTimeout(()=>{if(SND.level===0||document.hidden){SND.el.pause();if(SND.ctx&&SND.ctx.state==='running')SND.ctx.suspend()}},800)}
 function sndBtn(){const b=document.getElementById('snd');b.textContent=ICON[SND.level];b.classList.toggle('on',SND.level>0);b.title=LNAME[SND.level]}
-document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;if(!SND.level){if(window.speechSynthesis)speechSynthesis.cancel();if(VO.el)VO.el.pause()}else voiceUnlock();localStorage.setItem('botOfficeSound',SND.level);sndApply();sndBtn()};
+document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;localStorage.setItem('botOfficeSound',SND.level);sndApply();sndBtn()};
 document.addEventListener('visibilitychange',sndApply);
 // при сохранённом «включено» браузер требует жест: включаем по первому касанию
-['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(e){if(SND.level>0&&!(e.target&&e.target.id==='snd')){sndApply();voiceUnlock()}removeEventListener(ev,f,true)},true));
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(e){if(SND.level>0&&!(e.target&&e.target.id==='snd'))sndApply();removeEventListener(ev,f,true)},true));
 sndBtn();
 // ---------- храп у зоны отдыха (только 3D, только со звуком, громче при приближении)
 function snoreSrc(){const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'audio/snore.ogg':'audio/snore.m4a'}
@@ -525,19 +525,7 @@ function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
  if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
  if(!arr||!arr.length)arr=b.phrases&&b.phrases.length?b.phrases:['Работаю.'];
  let t=arr[Math.floor(Math.random()*arr.length)];if(arr.length>1)for(let i=0;i<5&&t===b.lastPhrase;i++)t=arr[Math.floor(Math.random()*arr.length)];b.lastPhrase=t;return t}
-let ruVoice=null;function voiceRU(){if(ruVoice||!window.speechSynthesis)return ruVoice;ruVoice=speechSynthesis.getVoices().find(v=>/^ru/i.test(v.lang))||null;return ruVoice}
-if(window.speechSynthesis&&speechSynthesis.addEventListener)speechSynthesis.addEventListener('voiceschanged',()=>{ruVoice=null;voiceRU()});
-function duck(on){speaking=on;if(SND.ctx&&SND.gain&&SND.level>0){SND.gain.gain.setTargetAtTime(LEVELS[SND.level]*(on?.35:1),SND.ctx.currentTime,.2)}}
-// голос: заранее записанные фразы (audio/voice/*.mp3, gen_voice.py), один <audio>, разблокированный тапом по кнопке звука
-const VO={el:null,map:null,loading:false,last:null,err:null};
-function voiceMap(){if(VO.map||VO.loading)return;VO.loading=true;fetch('audio/voice/index.json').then(r=>r.json()).then(m=>{VO.map=m}).catch(()=>{}).finally(()=>{VO.loading=false})}
-function voiceUnlock(){if(!VO.el){VO.el=new Audio();VO.el.preload='auto';VO.el.setAttribute('playsinline','')}if(!VO.unlocked){VO.el.src='audio/voice/silence.mp3';const q=VO.el.play();if(q&&q.then)q.then(()=>{VO.unlocked=true}).catch(()=>{});else VO.unlocked=true}voiceMap()}
-function say(b,t){if(!(SND.level>0)||document.hidden)return;voiceMap();const m=VO.map,p=m&&m.bots[b.slug],h=p&&m.files[p+'|'+t];
- if(h&&VO.el){const el=VO.el;el.onended=el.onerror=el.onpause=null;el.pause();el.src='audio/voice/'+h+'.mp3';el.volume=Math.min(1,.5+LEVELS[SND.level]*.6);
-  el.onplaying=()=>duck(true);el.onended=el.onerror=el.onpause=()=>duck(false);VO.last=h;const q=el.play();if(q&&q.catch)q.catch(e=>{VO.err=String(e);duck(false);ttsSay(b,t)});return}
- ttsSay(b,t)}
-function ttsSay(b,t){if(!(SND.level>0)||document.hidden||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';const v=voiceRU();if(v)u.voice=v;
- u.rate=1.05;u.pitch=.8+(hsh(b.slug)%50)/100;u.volume=Math.min(1,.6+LEVELS[SND.level]*.5);u.onstart=()=>duck(true);u.onend=u.onerror=()=>duck(false);speechSynthesis.speak(u)}catch(e){duck(false)}}
+function say(){} // голос фраз выключен: только текстовые облачка
 function talkTick(dt){talkT-=dt;if(talkT>0)return;talkT=400;if(speech&&performance.now()>speech.until)speech=null;
  if(!D||view.tilt<.1||ptrs.size)return;if(vw()/view.zoom>190)return; // далеко — молчат
  const f=freeRect(),cx=f.x+f.w/2,cy=f.y+f.h/2,R=Math.min(f.w,f.h)*.3;let best=null,bd=1e9;
@@ -591,7 +579,7 @@ document.getElementById('rotl').onclick=()=>rotate(-1);document.getElementById('
 document.getElementById('topv').onclick=()=>setTop(baseView().tilt>=.05);
 document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
 const lg=document.getElementById('legend');
-lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Стены, которые загораживают вид, сами опускаются. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость. В 3D у зоны отдыха слышно храп — чем ближе, тем громче.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли (со звуком — голосом).<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw); храп: «Звук храпа», канал RELAX ОЗВУЧКА (youtu.be/sXttWXUCq1g), YouTube.</span>`;
+lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Стены, которые загораживают вид, сами опускаются. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость. В 3D у зоны отдыха слышно храп — чем ближе, тем громче.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли.<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw); храп: «Звук храпа», канал RELAX ОЗВУЧКА (youtu.be/sXttWXUCq1g), YouTube.</span>`;
 document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};lg.onclick=()=>lg.style.display='none';
 function barH(){document.documentElement.style.setProperty('--barh',(document.getElementById('bar').offsetHeight||52)+'px')}
 function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;renderer.setSize(innerWidth,innerHeight,false);barH();if(pickLayout()&&D){build();build3D();closeCard();viewIdx=-1;setWhere()}if(!viewT&&viewIdx<0&&!sel)fitAll(true)}
