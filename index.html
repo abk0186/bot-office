@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#151a2c">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <link rel="icon" href="data:,">
 <title>Офис ботов</title>
 <style>
@@ -57,7 +60,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 </div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js"></script>
+<script src="three.min.js?v=13"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -345,7 +348,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=13';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -401,7 +404,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=13');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl)}
  const a=zoneById.asset20;if(a){const tx=(a.table.x+.5)*T,tz=a.table.y*T+2;
   const m1=new THREE.Mesh(new THREE.CylinderGeometry(1,1,11,22),new THREE.MeshBasicMaterial({color:'#6d4c41'}));m1.scale.set(26,1,15);m1.position.set(tx,5.5,tz);scene.add(m1);meshes.push(m1);
@@ -485,6 +488,8 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
+const BUILD='13';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
   stats()}catch(e){if(!D){const el=document.getElementById('err');el.style.display='block';el.textContent='Не удалось загрузить данные'}}}
@@ -590,12 +595,12 @@ cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(
   if(!pinch.mode){const dyA=t.p[0].y-pinch.p[0].y,dyB=t.p[1].y-pinch.p[1].y,mdx=t.x-pinch.x,mdy=t.y-pinch.y;
    if(Math.hypot(mdx,mdy)+Math.abs(t.d-pinch.d)+Math.abs(pinch.da)*60>12){
     const lo=Math.min(Math.abs(dyA),Math.abs(dyB)),hi=Math.max(Math.abs(dyA),Math.abs(dyB));pinch.mode=(dyA*dyB>0&&lo>3&&lo>hi*.3&&Math.abs(mdy)>Math.abs(mdx)*1.5&&Math.abs(t.d/pinch.d-1)<.12&&Math.abs(pinch.da)<.15)?'tilt':'free'}}
-  if(pinch.mode==='tilt'){view.tilt=Math.max(.06,Math.min(1.15,v.tilt+(t.y-pinch.y)*.006))}
+  if(pinch.mode==='tilt'){view.tilt=Math.max(.45,Math.min(1.15,v.tilt+(t.y-pinch.y)*.006))}
   else if(pinch.mode==='free'){view.zoom=Math.max(.3,Math.min(7,v.zoom*t.d/pinch.d));view.az=v.az+pinch.da;applyCamera(view);const[cx,cz]=s2w(t.x,t.y);view.tx+=pinch.w[0]-cx;view.tz+=pinch.w[1]-cz}
   return}
  if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>6)moved=true;if(!moved)return;
   if(drag.pan){applyCamera(view);const[cx,cz]=s2w(e.clientX,e.clientY);view.tx+=drag.w[0]-cx;view.tz+=drag.w[1]-cz}
-  else{view.az=drag.v.az-dx*.009;view.tilt=Math.max(.0015,Math.min(1.15,drag.v.tilt+dy*.006))}}});
+  else{view.az=drag.v.az-dx*.009;view.tilt=Math.max(.45,Math.min(1.15,drag.v.tilt+dy*.006)) /* в 3D не уходим в «почти сверху» — стены не сплющиваются */}}});
 function up(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
  if(ptrs.size>=2){startPinch();return}
  pinch=null;if(ptrs.size===1){const p=[...ptrs.values()][0];startDrag(p.x,p.y,true);return}
