@@ -427,7 +427,7 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
   if((b.act.routines||[]).some(r=>r.state==='работает')&&b.mode==='seat'){octx.fillStyle='#fff';octx.beginPath();octx.arc(X-11,Y+9,4,0,7);octx.fill();octx.strokeStyle='#3047b8';octx.lineWidth=1.2;octx.beginPath();octx.moveTo(X-11,Y+9);octx.lineTo(X-11,Y+6.5);octx.moveTo(X-11,Y+9);octx.lineTo(X-9,Y+9);octx.stroke()}
   octx.restore();
   if(b.mode==='talk'&&b.target){const[tx,ty]=w2s(b.target.x,b.target.y,headH(b.target));octx.save();octx.translate(tx+10*k,ty);octx.scale(k,k);bubble(0,-2);octx.restore()}});
- drawLabels()}
+ drawLabels();drawSpeech()}
 function labelPos(b,fz){const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y,0);return[sx,sy0+3+lv*(fz+6)]}
 function drawLabels(){
  const fz=Math.max(9.5,Math.min(13,8+view.zoom*1.6));
@@ -446,8 +446,8 @@ let lastT=performance.now();
 function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
  if(viewT){const k=Math.min(1,(now-viewT.t)/viewT.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2,f=viewT.from,t=viewT.to;const da=((t.az-f.az+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
   view={tx:f.tx+(t.tx-f.tx)*e,tz:f.tz+(t.tz-f.tz)*e,az:f.az+da*e,tilt:f.tilt+(t.tilt-f.tilt)*e,zoom:f.zoom+(t.zoom-f.zoom)*e};if(k>=1){view={...t};viewT=null}}
- if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));audioTick(dt)}
-  applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);drawOverlay();topBtn()}
+ if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt))}snoreTick(dt);
+  applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
@@ -492,65 +492,56 @@ function openBot(b,keep){sel=b;selZone=zoneById[b.zone];if(!keep){viewIdx=zones.
 function goAll(){closeCard();viewIdx=-1;setWhere();fitAll()}
 function setWhere(){document.getElementById('where').textContent=viewIdx<0?'Весь офис':(zones[viewIdx].kind==='cabinet'?'Кабинет директора':zones[viewIdx].name)}
 
-// ---------- звук: всё синтезируется Web Audio API, без файлов
-const SND={ctx:null,master:null,pre:null,an:null,noise:null,level:+(localStorage.getItem('botOfficeSound')||0),tone:null,keys:0,keyWin:0,lounge:0,sleepers:[]};
-const LEVELS=[0,.35,.65,1],ICON=['🔇','🔈','🔉','🔊'],LNAME=['звук выключен','тихо','средне','погромче'];
-function sndInit(){if(SND.ctx)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const c=new C();SND.ctx=c;
- const comp=c.createDynamicsCompressor();comp.threshold.value=-24;comp.knee.value=12;comp.ratio.value=6;comp.attack.value=.005;comp.release.value=.25;
- SND.master=c.createGain();SND.master.gain.value=0;SND.pre=c.createGain();SND.pre.gain.value=.9;SND.pre.connect(comp);comp.connect(SND.master);SND.master.connect(c.destination);
- SND.an=c.createAnalyser();SND.an.fftSize=512;SND.master.connect(SND.an);
- const len=c.sampleRate*2,buf=c.createBuffer(1,len,c.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;SND.noise=buf;
- /* фонового шума помещения нет: только звуки работы */}
-function sndApply(){const on=SND.level>0&&!document.hidden;if(SND.level>0)sndInit();if(!SND.ctx)return;const c=SND.ctx;
- if(on&&c.state!=='running')c.resume();SND.master.gain.cancelScheduledValues(c.currentTime);SND.master.gain.setTargetAtTime(on?LEVELS[SND.level]:0,c.currentTime,.25);
- if(!on)setTimeout(()=>{if((SND.level===0||document.hidden)&&c.state==='running')c.suspend()},900)}
+// ---------- звук: единственный фон — запись офиса (audio/ambient.*, источник в CREDITS.md); файл грузится только при включении
+const SND={ctx:null,gain:null,an:null,el:null,level:+(localStorage.getItem('botOfficeSound')||0)};
+const LEVELS=[0,.3,.55,.8],ICON=['🔇','🔈','🔉','🔊'],LNAME=['звук выключен','тихо','средне','погромче'];
+function sndSrc(){const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'audio/ambient.ogg':'audio/ambient.m4a'}
+function sndInit(){if(SND.el)return;const el=new Audio();el.loop=true;el.preload='auto';el.src=sndSrc();SND.el=el;
+ const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+ try{const c=new C(),src=c.createMediaElementSource(el),g=c.createGain(),an=c.createAnalyser();g.gain.value=0;an.fftSize=512;src.connect(g);g.connect(c.destination);g.connect(an);SND.ctx=c;SND.gain=g;SND.an=an}catch(e){SND.ctx=null}}
+function sndApply(){const on=SND.level>0&&!document.hidden;if(on)sndInit();if(!SND.el)return;const v=on?LEVELS[SND.level]:0;
+ if(SND.ctx){const c=SND.ctx;if(on&&c.state!=='running')c.resume();SND.gain.gain.cancelScheduledValues(c.currentTime);SND.gain.gain.setTargetAtTime(v,c.currentTime,.3)}else SND.el.volume=v;
+ if(on){const p=SND.el.play();if(p&&p.catch)p.catch(()=>{})}else setTimeout(()=>{if(SND.level===0||document.hidden){SND.el.pause();if(SND.ctx&&SND.ctx.state==='running')SND.ctx.suspend()}},800)}
 function sndBtn(){const b=document.getElementById('snd');b.textContent=ICON[SND.level];b.classList.toggle('on',SND.level>0);b.title=LNAME[SND.level]}
-document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;localStorage.setItem('botOfficeSound',SND.level);sndInit();sndApply();sndBtn()};
+document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;if(!SND.level&&window.speechSynthesis)speechSynthesis.cancel();localStorage.setItem('botOfficeSound',SND.level);sndApply();sndBtn()};
 document.addEventListener('visibilitychange',sndApply);
 // при сохранённом «включено» браузер требует жест: включаем по первому касанию
-['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(){if(SND.level>0){sndInit();sndApply()}removeEventListener(ev,f,true)},true));
-const rnd=(a,b)=>a+Math.random()*(b-a);
-function spatial(wx,wy){const[sx,sy]=w2s(wx,wy);const w=vw(),h=vh();const pan=Math.max(-1,Math.min(1,(sx-w/2)/(w/2)))*.7;
- const off=Math.max(0,Math.abs(sx-w/2)-w/2)+Math.max(0,Math.abs(sy-h/2)-h/2);const dist=Math.hypot(sx-w/2,sy-h/2)/Math.max(w,h);
- const zoom=Math.min(1.25,.65+view.zoom*.15);return{pan,g:zoom/(1+dist*1.2)/(1+off/150)}}
-function out(c,pan){const p=c.createStereoPanner?c.createStereoPanner():null;if(p){p.pan.value=pan;p.connect(SND.pre);return p}return SND.pre}
-function burst(t,{f,q=1.2,type='bandpass',dur=.03,g=.05,pan=0,att=.002,rate=1}){const c=SND.ctx,src=c.createBufferSource();src.buffer=SND.noise;src.playbackRate.value=rate;
- const fl=c.createBiquadFilter();fl.type=type;fl.frequency.value=f;fl.Q.value=q;const e=c.createGain();e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(g,t+att);e.gain.exponentialRampToValueAtTime(.0001,t+dur);
- src.connect(fl);fl.connect(e);e.connect(out(c,pan));src.start(t,Math.random()*1.5,dur+.05)}
-function keyClick(b){const sp=spatial(b.x,b.y);if(sp.g<.08)return;const t=SND.ctx.currentTime+.01;const big=Math.random()<.08;
- burst(t,{f:big?rnd(700,950):rnd(2600,4200),q:big?1:rnd(1,2),dur:big?.05:rnd(.018,.03),g:(big?.05:.035)*rnd(.6,1.1)*sp.g,pan:sp.pan});
- burst(t+.004,{f:rnd(1200,1600),q:3,dur:.012,g:.012*sp.g,pan:sp.pan})}
-function step(b){const sp=spatial(b.x,b.y);if(sp.g<.08)return;const t=SND.ctx.currentTime+.01;burst(t,{type:'lowpass',f:rnd(300,520),q:.7,dur:rnd(.05,.08),g:.06*rnd(.7,1)*sp.g,pan:sp.pan,att:.004});
- burst(t+.01,{f:rnd(1800,2600),q:2,dur:.02,g:.006*sp.g,pan:sp.pan})}
-function breath(b){ // сопение: тональный храп с «дребезгом», без шумового слоя (чтобы не было похоже на ветер)
- const c=SND.ctx,sp=spatial(b.x,b.y);if(sp.g<.1)return;const t=c.currentTime+.02,inh=rnd(.9,1.3),G=sp.g*.6,pan=sp.pan;
- const o=c.createOscillator();o.type='sawtooth';o.frequency.setValueAtTime(rnd(72,98),t);o.frequency.linearRampToValueAtTime(rnd(85,110),t+inh);
- const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=rnd(260,340);lp.Q.value=3;
- const fl=c.createGain();fl.gain.value=.55;const lfo=c.createOscillator();lfo.frequency.value=rnd(22,30);const lg=c.createGain();lg.gain.value=.45;lfo.connect(lg);lg.connect(fl.gain);
- const e=c.createGain();e.gain.setValueAtTime(0,t);e.gain.linearRampToValueAtTime(.016*G,t+inh*.55);e.gain.linearRampToValueAtTime(.012*G,t+inh*.9);e.gain.linearRampToValueAtTime(0,t+inh+.08);
- o.connect(lp);lp.connect(fl);fl.connect(e);e.connect(out(c,pan));o.start(t);lfo.start(t);o.stop(t+inh+.15);lfo.stop(t+inh+.15);
- // тихий выдох «хм» низким тоном
- const t2=t+inh+rnd(.5,.8),o2=c.createOscillator();o2.type='sine';o2.frequency.value=rnd(130,170);const e2=c.createGain();e2.gain.setValueAtTime(0,t2);e2.gain.linearRampToValueAtTime(.006*G,t2+.12);e2.gain.exponentialRampToValueAtTime(.0001,t2+.6);o2.connect(e2);e2.connect(out(c,pan));o2.start(t2);o2.stop(t2+.65)}
-function loungeAmbience(){const z=zoneById.lounge;if(!z)return;const c=SND.ctx,sp=spatial((z.x+z.w-1)*T,(z.y+1)*T);if(sp.g<.08)return;const t=c.currentTime+.05;
- if(Math.random()<.45){ // кофемашина: тихое жужжание и струйка
-  const o=c.createOscillator();o.type='sawtooth';o.frequency.value=rnd(120,150);const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=500;const g=c.createGain();const d=rnd(1.2,1.8);
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.008*sp.g,t+.25);g.gain.linearRampToValueAtTime(.006*sp.g,t+d);g.gain.linearRampToValueAtTime(0,t+d+.3);o.connect(lp);lp.connect(g);g.connect(out(c,sp.pan));o.start(t);o.stop(t+d+.4);
-  const s=c.createBufferSource();s.buffer=SND.noise;const f=c.createBiquadFilter();f.type='bandpass';f.frequency.value=rnd(2500,3500);f.Q.value=2;const e=c.createGain();const t2=t+d+.4,d2=rnd(1,1.5);
-  e.gain.setValueAtTime(0,t2);e.gain.linearRampToValueAtTime(.01*sp.g,t2+.3);e.gain.linearRampToValueAtTime(0,t2+d2);s.connect(f);f.connect(e);e.connect(out(c,sp.pan));s.start(t2,Math.random());s.stop(t2+d2+.1)}
- else{ // звон чашки
-  const n=Math.random()<.5?1:2;for(let k=0;k<n;k++){const tt=t+k*rnd(.12,.25);[rnd(2400,3200),rnd(4800,5600)].forEach((fr,i)=>{const o=c.createOscillator();o.type='sine';o.frequency.value=fr;const g=c.createGain();g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime((i?.004:.01)*sp.g,tt+.003);g.gain.exponentialRampToValueAtTime(.0001,tt+rnd(.25,.45));o.connect(g);g.connect(out(c,sp.pan));o.start(tt);o.stop(tt+.5)})}}}
-function audioTick(dt){if(!SND.ctx||SND.level===0||document.hidden||SND.ctx.state!=='running'||paused)return;const now=animTime;
- SND.keyWin-=dt;if(SND.keyWin<=0){SND.keyWin=1000;SND.keys=0}
- bots.forEach(b=>{
-  if(b.mode==='go'||b.mode==='back'){b.stepAcc=(b.stepAcc||0)+dt;if(b.stepAcc>rnd(300,360)){b.stepAcc=0;step(b)}return}
-  if(b.mode!=='seat'||b.place!=='desk')return;const lvl=b.st==='busy'?2:b.st==='today'?1:b.st==='week'?0:-1;if(lvl<0)return;
-  if(!b.ty||now>=b.ty.until){const on=!(b.ty&&b.ty.on);const P=[[.6,1.5,15e3,40e3],[1,3,4e3,12e3],[1.5,5,1.5e3,4e3]][lvl];b.ty={on,until:now+(on?rnd(P[0],P[1])*1000:rnd(P[2],P[3])),next:now}}
-  if(b.ty.on&&now>=b.ty.next){b.ty.next=now+rnd(lvl===2?70:95,lvl===2?170:230)*(Math.random()<.1?3:1);if(SND.keys<22){SND.keys++;keyClick(b)}}});
- // дыхание и сопение: до 3 ближайших спящих
- const sl=bots.filter(b=>b.st==='sleep'&&b.mode==='seat');sl.forEach(b=>{if(!b.br)b.br=now+rnd(0,4000)});
- sl.sort((a,b)=>spatial(b.x,b.y).g-spatial(a.x,a.y).g).slice(0,2).forEach(b=>{if(now>=b.br){b.br=now+rnd(5000,8000);if(Math.random()<.7)breath(b)}});
- if(!SND.lounge)SND.lounge=now+rnd(8e3,15e3);if(now>=SND.lounge){SND.lounge=now+rnd(25e3,60e3);loungeAmbience()}}
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(){if(SND.level>0)sndApply();removeEventListener(ev,f,true)},true));
 sndBtn();
+// ---------- храп у зоны отдыха (только 3D, только со звуком, громче при приближении)
+function snoreSrc(){const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'audio/snore.ogg':'audio/snore.m4a'}
+function snoreInit(){if(SND.sn||!SND.ctx)return;const el=new Audio();el.loop=true;el.preload='auto';el.src=snoreSrc();const src=SND.ctx.createMediaElementSource(el),g=SND.ctx.createGain();g.gain.value=0;src.connect(g);g.connect(SND.ctx.destination);g.connect(SND.an);SND.sn={el,g,vol:0,off:0}}
+function loungeNear(){const z=zoneById.lounge;if(!z||view.tilt<.1)return 0;const Lw=z.w*T,Wv=vw()/view.zoom,zf=Math.max(0,Math.min(1,(Lw*1.2-Wv)/(Lw*1.2-Lw*.35)));if(!zf)return 0;
+ const[cx,cz]=s2w(vw()/2,freeRect().y+freeRect().h/2);const dx=Math.max(z.x*T-cx,0,cx-(z.x+z.w)*T),dz=Math.max(z.y*T-cz,0,cz-(z.y+z.h)*T);const cf=Math.max(0,Math.min(1,1-Math.hypot(dx,dz)/(4*T)));return zf*cf}
+let snoreT=0;
+function snoreTick(dt){snoreT-=dt;if(snoreT>0)return;snoreT=150;const on=SND.level>0&&!document.hidden&&SND.ctx;const p=on?loungeNear():0;
+ if(p>0&&!SND.sn)snoreInit();const s=SND.sn;if(!s)return;const v=p*LEVELS[SND.level]*.9*(speaking?.35:1);
+ s.g.gain.setTargetAtTime(v,SND.ctx.currentTime,.5);
+ if(v>.005){s.off=0;if(s.el.paused){const q=s.el.play();if(q&&q.catch)q.catch(()=>{})}}else if(!s.el.paused){s.off+=150;if(s.off>2500)s.el.pause()}}
+// ---------- фразы ботов при приближении камеры (облачко + голос, если звук включён)
+let speech=null,speaking=false,talkT=0;
+function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
+ if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
+ if(!arr||!arr.length)arr=b.phrases&&b.phrases.length?b.phrases:['Работаю.'];
+ let t=arr[Math.floor(Math.random()*arr.length)];if(arr.length>1)for(let i=0;i<5&&t===b.lastPhrase;i++)t=arr[Math.floor(Math.random()*arr.length)];b.lastPhrase=t;return t}
+let ruVoice=null;function voiceRU(){if(ruVoice||!window.speechSynthesis)return ruVoice;ruVoice=speechSynthesis.getVoices().find(v=>/^ru/i.test(v.lang))||null;return ruVoice}
+if(window.speechSynthesis&&speechSynthesis.addEventListener)speechSynthesis.addEventListener('voiceschanged',()=>{ruVoice=null;voiceRU()});
+function duck(on){speaking=on;if(SND.ctx&&SND.gain&&SND.level>0){SND.gain.gain.setTargetAtTime(LEVELS[SND.level]*(on?.35:1),SND.ctx.currentTime,.2)}}
+function say(b,t){if(!(SND.level>0)||document.hidden||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';const v=voiceRU();if(v)u.voice=v;
+ u.rate=1.05;u.pitch=.8+(hsh(b.slug)%50)/100;u.volume=Math.min(1,.6+LEVELS[SND.level]*.5);u.onstart=()=>duck(true);u.onend=u.onerror=()=>duck(false);speechSynthesis.speak(u)}catch(e){duck(false)}}
+function talkTick(dt){talkT-=dt;if(talkT>0)return;talkT=400;if(speech&&performance.now()>speech.until)speech=null;
+ if(!D||view.tilt<.1||ptrs.size)return;if(vw()/view.zoom>190)return; // далеко — молчат
+ const f=freeRect(),cx=f.x+f.w/2,cy=f.y+f.h/2,R=Math.min(f.w,f.h)*.3;let best=null,bd=1e9;
+ bots.forEach(b=>{const[sx,sy]=w2s(b.x,b.y,headH(b)*.6);const d=Math.hypot(sx-cx,sy-cy);if(d<bd){bd=d;best=b}});
+ if(!best||bd>R)return;if(speech&&speech.b===best)return;const now=performance.now();if(best.sayCool&&now<best.sayCool)return;if(speech&&now<speech.until-1500)return;
+ const t=pickPhrase(best);best.sayCool=now+8000;speech={b:best,t,until:now+Math.max(3500,t.length*85)};say(best,t)}
+function drawSpeech(){if(!speech)return;const b=speech.b;const[hx,hy]=w2s(b.x,b.y,headH(b));const fz=13;octx.font='600 '+fz+'px -apple-system,Roboto,sans-serif';
+ const words=speech.t.split(' '),lines=[];let cur='';const maxW=Math.min(200,vw()*.55);words.forEach(w=>{const tr=cur?cur+' '+w:w;if(octx.measureText(tr).width>maxW&&cur){lines.push(cur);cur=w}else cur=tr});if(cur)lines.push(cur);
+ const tw=Math.max(...lines.map(l=>octx.measureText(l).width))+20,th=lines.length*(fz+4)+12;let x=Math.max(6,Math.min(vw()-tw-6,hx-tw/2)),y=hy-th-22;
+ const k=Math.min(1,(speech.until-performance.now())/400);octx.save();octx.globalAlpha=Math.max(0,k);
+ octx.fillStyle='#fff';octx.strokeStyle='#1b2040';octx.lineWidth=1.5;rrp(x,y,tw,th,10);octx.fill();octx.stroke();
+ octx.beginPath();octx.moveTo(hx-6,y+th-1);octx.lineTo(hx,y+th+10);octx.lineTo(hx+6,y+th-1);octx.closePath();octx.fill();octx.beginPath();octx.moveTo(hx-6,y+th);octx.lineTo(hx,y+th+10);octx.lineTo(hx+6,y+th);octx.stroke();
+ octx.fillStyle='#1b2040';octx.textAlign='left';octx.textBaseline='top';lines.forEach((l,i)=>octx.fillText(l,x+10,y+7+i*(fz+4)));octx.restore();octx.textBaseline='alphabetic'}
 window.__sndLevel=()=>{if(!SND.an)return 0;const a=new Float32Array(SND.an.fftSize);SND.an.getFloatTimeDomainData(a);let m=0;for(const v of a)m=Math.max(m,Math.abs(v));return m};
 // ---------- ввод: один палец — орбита (сверху — сдвиг); два пальца — поворот (вращение пальцами), щипок — масштаб, сдвиг; два пальца вверх-вниз — наклон
 let ptrs=new Map(),drag=null,moved=false,pinch=null;
@@ -591,7 +582,7 @@ document.getElementById('rotl').onclick=()=>rotate(-1);document.getElementById('
 document.getElementById('topv').onclick=()=>setTop(baseView().tilt>=.05);
 document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
 const lg=document.getElementById('legend');
-lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Стены, которые загораживают вид, сами опускаются. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: тихий живой офис (клавиатуры, шаги, сопение, кофемашина). Нажимай, чтобы выбрать громкость.<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.</span>`;
+lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Стены, которые загораживают вид, сами опускаются. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость. В 3D у зоны отдыха слышно храп — чем ближе, тем громче.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли (со звуком — голосом).<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw); храп: «Звук храпа», канал RELAX ОЗВУЧКА (youtu.be/sXttWXUCq1g), YouTube.</span>`;
 document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};lg.onclick=()=>lg.style.display='none';
 function barH(){document.documentElement.style.setProperty('--barh',(document.getElementById('bar').offsetHeight||52)+'px')}
 function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;renderer.setSize(innerWidth,innerHeight,false);barH();if(pickLayout()&&D){build();build3D();closeCard();viewIdx=-1;setWhere()}if(!viewT&&viewIdx<0&&!sel)fitAll(true)}
