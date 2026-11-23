@@ -60,7 +60,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 </div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=15.2"></script>
+<script src="three.min.js?v=15.3"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -71,7 +71,7 @@ let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool=
 let view={tx:200,tz:300,az:0,tilt:.72,zoom:1},viewT=null,paused=false,sel=null,selZone=null,viewIdx=-1,animTime=0,schedT=0;
 // ---------- время намаза (Астана, метод ДУМК: Фаджр/Иша 15°, Аср по ханафи, +3 мин ихтият)
 const NAMAZ=[['fajr','Фаджр'],['dhuhr','Зухр'],['asr','Аср'],['maghrib','Магриб'],['isha','Иша']];
-const DUA=['Аллах, даруй нам всем процветание и благо, и баракат в нашей работе.','Аллах, пошли благо и достаток всем нам и баракат в наших делах.','Аллах, сделай нашу работу благословенной, а всем нам даруй процветание и добро.'];
+const DUA=['О Аллах, дай баракат во всех наших начинаниях и в нашей работе. Если в этом деле есть благо для нас, для нашей веры, жизни и семей, даруй нам его, облегчи наш путь и благослови его. А если блага в нём нет, отведи его от нас и предопредели нам благо, где бы оно ни было. Сделай наш заработок чистым и дозволенным, а наш труд полезным для людей. Амин.'];
 function prayerTimes(date){const lat=51.17,lng=71.45,tz=5,R=Math.PI/180,sn=x=>Math.sin(x*R),cs=x=>Math.cos(x*R),fx=(a,b)=>{a=a-b*Math.floor(a/b);return a<0?a+b:a};
  const ad=new Date(date.getTime()+tz*36e5),y=ad.getUTCFullYear(),m=ad.getUTCMonth()+1,d=ad.getUTCDate();let Y=y,M=m;if(M<=2){Y--;M+=12}const A=Math.floor(Y/100),B=2-A+Math.floor(A/4);
  const jd=Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+d+B-1524.5-lng/(15*24);
@@ -431,7 +431,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.2';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.3';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -488,7 +488,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.2');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.3');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -521,7 +521,7 @@ function updateSprites(){bots.forEach(b=>{const s=spr.get(b.slug);if(!s)return;c
 function praying(b){return b.place==='prayer'&&b.mode==='seat'&&Math.hypot(b.x-b.sit.x,b.y-b.sit.y)<2}
 function duaTick(dt){duaT-=dt;if(duaT>0)return;duaT=1000;const b=bySlug[imamSlug];if(!b||!praying(b))return;if(!b.prayStart)b.prayStart=animTime;if(animTime-b.prayStart<6000)return;
  const now=performance.now();if(speech&&speech.b===b&&now<speech.until)return;if(speech&&now<speech.until-800)return;if(b.duaNext&&now<b.duaNext)return;
- const t=DUA[(b.duaI=(b.duaI||0)+1)%DUA.length];speech={b,t,until:now+7000};b.duaNext=now+16000}
+ const t=DUA[(b.duaI=(b.duaI||0)+1)%DUA.length];speech={b,t,until:now+15000};b.duaNext=now+30000}
 // ---------- камера (орбита)
 const TILT3D=.72;
 const _v=new THREE.Vector3(),_o=new THREE.Vector3(),_d=new THREE.Vector3();
@@ -584,7 +584,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='15.2';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15.3';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
@@ -665,7 +665,7 @@ function snoreTick(dt){snoreT-=dt;if(snoreT>0)return;snoreT=150;const on=SND.lev
 // ---------- фразы ботов при приближении камеры (облачко + голос, если звук включён)
 let speech=null,speaking=false,talkT=0;
 function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
- if(b.place==='prayer')arr=DUA;else if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
+ if(b.place==='prayer')arr=b.slug===imamSlug?DUA:['Амин.'];else if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
  if(!arr||!arr.length)arr=b.phrases&&b.phrases.length?b.phrases:['Работаю.'];
  let t=arr[Math.floor(Math.random()*arr.length)];if(arr.length>1)for(let i=0;i<5&&t===b.lastPhrase;i++)t=arr[Math.floor(Math.random()*arr.length)];b.lastPhrase=t;return t}
 function say(){} // голос фраз выключен: только текстовые облачка
@@ -674,10 +674,10 @@ function talkTick(dt){talkT-=dt;if(talkT>0)return;talkT=400;if(speech&&performan
  const f=freeRect(),cx=f.x+f.w/2,cy=f.y+f.h/2,R=Math.min(f.w,f.h)*.3;let best=null,bd=1e9;
  bots.forEach(b=>{const[sx,sy]=w2s(b.x,b.y,headH(b)*.6);const d=Math.hypot(sx-cx,sy-cy);if(d<bd){bd=d;best=b}});
  if(!best||bd>R)return;if(speech&&speech.b===best)return;const now=performance.now();if(best.sayCool&&now<best.sayCool)return;if(speech&&now<speech.until-1500)return;
- const t=pickPhrase(best);best.sayCool=now+8000;speech={b:best,t,until:now+Math.max(3500,t.length*85)};say(best,t)}
-function drawSpeech(){if(!speech)return;const b=speech.b;const[hx,hy]=w2s(b.x,b.y,headH(b));const fz=13;octx.font='600 '+fz+'px -apple-system,Roboto,sans-serif';
- const words=speech.t.split(' '),lines=[];let cur='';const maxW=Math.min(200,vw()*.55);words.forEach(w=>{const tr=cur?cur+' '+w:w;if(octx.measureText(tr).width>maxW&&cur){lines.push(cur);cur=w}else cur=tr});if(cur)lines.push(cur);
- const tw=Math.max(...lines.map(l=>octx.measureText(l).width))+20,th=lines.length*(fz+4)+12;let x=Math.max(6,Math.min(vw()-tw-6,hx-tw/2)),y=hy-th-22;
+ const t=pickPhrase(best);best.sayCool=now+8000;speech={b:best,t,until:now+(t.length>120?15000:Math.max(3500,t.length*85))};say(best,t)}
+function drawSpeech(){if(!speech)return;const b=speech.b;const[hx,hy]=w2s(b.x,b.y,headH(b));const long=speech.t.length>120,fz=long?12:13;octx.font='600 '+fz+'px -apple-system,Roboto,sans-serif';
+ const words=speech.t.split(' '),lines=[];let cur='';const maxW=long?Math.min(330,vw()-32):Math.min(200,vw()*.55);words.forEach(w=>{const tr=cur?cur+' '+w:w;if(octx.measureText(tr).width>maxW&&cur){lines.push(cur);cur=w}else cur=tr});if(cur)lines.push(cur);
+ const tw=Math.max(...lines.map(l=>octx.measureText(l).width))+20,th=lines.length*(fz+4)+12;let x=Math.max(6,Math.min(vw()-tw-6,long?hx-tw*.8:hx-tw/2)),y=Math.max(long?70:6,hy-th-22); // длинное дуа — левее имама, подальше от табло на восточной стене
  const k=Math.min(1,(speech.until-performance.now())/400);octx.save();octx.globalAlpha=Math.max(0,k);
  octx.fillStyle='#fff';octx.strokeStyle='#1b2040';octx.lineWidth=1.5;rrp(x,y,tw,th,10);octx.fill();octx.stroke();
  octx.beginPath();octx.moveTo(hx-6,y+th-1);octx.lineTo(hx,y+th+10);octx.lineTo(hx+6,y+th-1);octx.closePath();octx.fill();octx.beginPath();octx.moveTo(hx-6,y+th);octx.lineTo(hx,y+th+10);octx.lineTo(hx+6,y+th);octx.stroke();
