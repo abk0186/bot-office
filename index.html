@@ -109,6 +109,15 @@ function build(){
    z.bossSeat={x:seats[3][0],y:seats[3][1]};
    block(z.x+z.w-1,z.y);decor.push({t:'plant',x:z.x+z.w-1,y:z.y});block(z.x,z.y);decor.push({t:'plant',x:z.x,y:z.y});
    decor.push({t:'board',x:z.x+2,y:z.y});block(z.x+2,z.y);block(z.x+3,z.y);
+  }else if(z.kind==='prayer'){ // намазхана: маленькая комната со стенами, дверь в дальнем от михраба конце
+   const sd={n:z.y>1,s:z.y+z.h<H-1,w:z.x>1,e:z.x+z.w<W-1};z.sides=sd;
+   if(sd.n||sd.s){z.door={x:z.x+z.w-2,y:sd.n?z.y-1:z.y+z.h,w:2,h:1}}else{z.door={x:sd.e?z.x+z.w:z.x-1,y:z.y+z.h-2,w:1,h:2}}
+   const d=z.door,add=(x,y)=>{if(!(x>=d.x&&x<d.x+d.w&&y>=d.y&&y<d.y+d.h))block(x,y)};
+   const x0=z.x-(sd.w?1:0),x1=z.x+z.w-(sd.e?0:1);
+   if(sd.n)for(let x=x0;x<=x1;x++)add(x,z.y-1);if(sd.s)for(let x=x0;x<=x1;x++)add(x,z.y+z.h);
+   if(sd.w)for(let y=z.y;y<z.y+z.h;y++)add(z.x-1,y);if(sd.e)for(let y=z.y;y<z.y+z.h;y++)add(z.x+z.w,y);
+   for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++)block(x,y); // внутрь боты не заходят
+   decor.push({t:'shoes',x:z.x+z.w-1,y:z.y+z.h-1});
   }else if(z.kind==='lounge'){
    const rowsY=z.h>=5?[z.y+1,z.y+3]:[z.y+1];
    rowsY.forEach((ry,ri)=>{for(let sx=z.x+1+ri;sx<=z.x+z.w-2;sx+=2){lounge.push({x:sx,y:ry});sofas.push({x:sx,y:ry,w:1})}});
@@ -125,6 +134,7 @@ function build(){
   }
  });
  // кулер и диван в свободных местах
+ (L.decor||[]).forEach(e=>{if(free(e[1],e[2])){block(e[1],e[2]);decor.push({t:e[0],x:e[1],y:e[2]})}});
  if(L.bench)for(let i=0;i<L.bench[2];i+=2)bench.push({x:L.bench[0]+i,y:L.bench[1]});
  const extra=LAY==='wide'?[]:[{t:'cooler',x:22,y:9,w:1}];
  extra.forEach(e=>{let ok=true;for(let i=0;i<e.w;i++)if(!free(e.x+i,e.y))ok=false;if(ok){for(let i=0;i<e.w;i++)block(e.x+i,e.y);decor.push(e)}});
@@ -265,7 +275,9 @@ function drawDecor(d){const x=d.x*T,y=d.y*T;
  if(d.t==='printer'){R(x+2,y-2,28,14,'#cfd8dc');R(x+5,y-6,22,4,'#fff');R(x+4,y+4,24,2,'#455a64')}
  if(d.t==='ctable'){R(x+2,y+2,28,9,'#6d4c41');R(x+2,y+2,28,2,'#8d6e63');R(x+7,y-1,4,4,'#fff');R(x+8,y-1,2,1,'#6d4c41');R(x+19,y-1,4,4,'#fff');R(x+20,y-1,2,1,'#6d4c41');R(x+4,y+11,2,4,'#4e342e');R(x+26,y+11,2,4,'#4e342e')}
  if(d.t==='coffee'){R(x+2,y-12,12,22,'#37474f');R(x+2,y-12,12,3,'#546e7a');R(x+4,y-6,8,5,'#263238');R(x+6,y,5,5,'#fff');R(x+7,y,3,1,'#6d4c41');R(x+11,y-10,2,2,'#ff5252')}
+ if(d.t==='shoes')drawShoes(x,y);
  if(d.t==='board'){R(x,y-8,32,14,'#fafafa');R(x,y-8,32,2,'#90a4ae');R(x+3,y-4,10,1,'#e53935');R(x+3,y-1,16,1,'#1e88e5');R(x+20,y-5,8,6,'#ffd54f')}}
+function drawShoes(x,y){R(x+1,y+2,14,9,'#8d6e63');R(x+1,y+2,14,2,'#a1887f');R(x+3,y+4,4,3,'#37474f');R(x+9,y+4,4,3,'#5d4037')}
 function drawWorld(){
  // пол open space
  R(-4000,-4000,W*T+8000,H*T+8000,'#151a2c');
@@ -273,6 +285,7 @@ function drawWorld(){
  for(let y=0;y<H;y++)for(let x=0;x<W;x+=2)R(x*T,y*T+T-1,T*2,1,'rgba(120,90,50,.18)');
  // зоны: ковры
  zones.forEach(z=>{if(z.kind==='cabinet'){for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++)R(x*T,y*T,T,T,(x+y)%2?'#7a5a44':'#81604a');R(z.x*T+12,(z.y+2)*T,(z.w)*T-24,(z.h-2.6)*T,'rgba(140,30,40,.55)');return}
+  if(z.kind==='prayer'){for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++)R(x*T,y*T,T,T,(x+y)%2?'#e9dfc8':'#e3d8bf');return}
   ctx.fillStyle=z.color+'55';rrp(z.x*T+3,z.y*T+3,z.w*T-6,z.h*T-6,8);ctx.fill();ctx.strokeStyle=z.color+'cc';ctx.lineWidth=2;ctx.setLineDash([6,4]);rrp(z.x*T+5,z.y*T+5,z.w*T-10,z.h*T-10,7);ctx.stroke();ctx.setLineDash([]);
   if(z.kind==='table'){ctx.fillStyle='rgba(255,183,77,.35)';ctx.beginPath();ctx.ellipse((z.table.x+.5)*T,z.table.y*T+2,64,42,0,0,7);ctx.fill()}});
  // окна вдоль верхней стены
@@ -314,8 +327,15 @@ function geoFrom(g){const geo=new THREE.BufferGeometry();geo.setAttribute('posit
 function mkMesh(g,mat,ro){const m=new THREE.Mesh(geoFrom(g),mat);if(ro)m.renderOrder=ro;scene.add(m);meshes.push(m);return m}
 function paintDesk(b){const x=b.desk.x*T,y=b.desk.y*T;R(x,y-4,32,16,'#a77a52');R(x,y-4,32,2,'#c4996c');R(x+10,y+6,12,3,'#e0e0e0');R(x+10,y+6,12,1,'#bdbdbd');prop(b.prop,x,y+9)}
 function paintBig(c){const x=c.big.x*T,y=c.big.y*T;R(x,y-4,48,30,'#6d4c41');R(x,y-4,48,3,'#8d6e63');R(x+2,y+4,44,1,'#5d4037');R(x+16,y+12,16,6,'#ffd54f');R(x+17,y+13,14,4,'#3e2723');R(x+6,y+14,6,5,'#fff');R(x+38,y+12,5,8,'#2e7d32')}
+// джай-намаз: по диагонали, головой к углу с михрабом
+function drawRug(z){ctx.save();ctx.translate(z.x*T+27,z.y*T+27);ctx.rotate(-Math.PI/4);const w=17,l=30;
+ R(-w/2,-l/2,w,l,'#6d1a26');R(-w/2+1.2,-l/2+1.2,w-2.4,l-2.4,'#b03a4e');R(-w/2+2.8,-l/2+2.8,w-5.6,l-5.6,'#7d1f2e');
+ ctx.strokeStyle='#e2bb5c';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-5,-l/2+13);ctx.lineTo(-5,-l/2+7);ctx.quadraticCurveTo(-5,-l/2+4,0,-l/2+3.2);ctx.quadraticCurveTo(5,-l/2+4,5,-l/2+7);ctx.lineTo(5,-l/2+13);ctx.stroke();
+ R(-4,l/2-8,8,1,'#e2bb5c');R(-4,l/2-6,8,1,'#e2bb5c');
+ for(let i=-w/2+1;i<w/2;i+=2){R(i,-l/2-1.6,.8,1.6,'#f3ead6');R(i,l/2,.8,1.6,'#f3ead6')}
+ ctx.restore()}
 function paintFloor(){floorCv.width=W*T*FS;floorCv.height=H*T*FS;ctx=fctx;fctx.setTransform(FS,0,0,FS,0,0);fctx.imageSmoothingEnabled=false;
- drawWorld();bots.forEach(b=>{if(b.kind==='desk')paintDesk(b)});decor.forEach(d=>drawDecor(d));const c=zoneById.cabinet;if(c)paintBig(c);const a=zoneById.asset20;if(a)drawTable(a);ctx=octx}
+ drawWorld();bots.forEach(b=>{if(b.kind==='desk')paintDesk(b)});decor.forEach(d=>drawDecor(d));const c=zoneById.cabinet;if(c)paintBig(c);const a=zoneById.asset20;if(a)drawTable(a);const pz=zoneById.prayer;if(pz)drawRug(pz);ctx=octx}
 const WH=46,DOORH=33; // высота стен ~3 м, двери ~2.1 м (бот ~1.75 м = 27)
 let wallSegs=[],portrait=null;
 const matSolid=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide});
@@ -347,16 +367,17 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   else if(d.t==='coffee')box(top,side,x+2,y-12,12,22,22,'#37474f',true);
   else if(d.t==='ctable')box(top,side,x+2,y+2,28,9,7,'#5d4037',true);
   else if(d.t==='board'){box(side,side,x,y-6,32,2,30,'#eceff1',false);box(side,side,x+2,y-5,2,2,14,'#78909c',false);box(side,side,x+28,y-5,2,2,14,'#78909c',false)}
-  else if(d.t==='sofa')box(top,side,x-2,y-2,52,16,7,'#3f51b5',true)});
+  else if(d.t==='sofa')box(top,side,x-2,y-2,52,16,7,'#3f51b5',true);
+  else if(d.t==='shoes')box(top,side,x+1,y+2,14,9,6,'#6d4c41',true)});
  sofas.forEach(f=>{box(top,side,f.x*T-5,f.y*T-4,T+10,16,7,'#5e35b1',true);box(side,side,f.x*T-5,f.y*T-8,T+10,4,15,'#4527a0',false)});
  if(bench.length){const x=bench[0].x*T,y=bench[0].y*T,w=(bench[bench.length-1].x-bench[0].x+1)*T;box(top,side,x-2,y-6,w+4,17,7,'#b37800',true)}
  mkMesh(top,matTop);mkMesh(side,matSide);mkMesh(glass,matWall,2);
  // высокие стены: каждая — отдельный кусок, чтобы прятать те, что между камерой и комнатой
  const OC='#9aa3c4',OT='#2b3350',CC='#c8a27a',CT='#3e2a1a';
  const seg=(n,inner,fn,lintel)=>{const g=G();fn(g);if(!g.p.length)return null;const m=mkMesh(g,matSolid);const s={m,n,inner,k:1,lintel};wallSegs.push(s);return s};
- const cx0=c?c.x*T:-1,cx1=c?(c.x+c.w)*T:-1;
+ const cx0=c?c.x*T:-1,cx1=c?(c.x+c.w)*T:-1,pr=zoneById.prayer;
  const north=seg([0,-1],false,g=>{box(g,g,0,0,W*T,T,WH,OC,false,0,OT);
-  for(let x=1;x<W-1;x+=3){const a=x*T+2,b=x*T+T*2-2;if(c&&b>cx0&&a<cx1)continue;quad(g,[[a,13,T+.3],[b,13,T+.3],[b,36,T+.3],[a,36,T+.3]],shade('#8ecdf2',1));quad(g,[[(a+b)/2-.6,13,T+.4],[(a+b)/2+.6,13,T+.4],[(a+b)/2+.6,36,T+.4],[(a+b)/2-.6,36,T+.4]],shade('#e3f2fd',1))}
+  for(let x=1;x<W-1;x+=3){const a=x*T+2,b=x*T+T*2-2;if(c&&b>cx0&&a<cx1)continue;if(pr&&pr.y===1&&b>(pr.x-1)*T&&a<(pr.x+pr.w+1)*T)continue;quad(g,[[a,13,T+.3],[b,13,T+.3],[b,36,T+.3],[a,36,T+.3]],shade('#8ecdf2',1));quad(g,[[(a+b)/2-.6,13,T+.4],[(a+b)/2+.6,13,T+.4],[(a+b)/2+.6,36,T+.4],[(a+b)/2-.6,36,T+.4]],shade('#e3f2fd',1))}
   if(c)quad(g,[[cx0,0,T+.2],[cx1,0,T+.2],[cx1,WH,T+.2],[cx0,WH,T+.2]],shade('#d7b98f',1))});
  seg([0,1],false,g=>box(g,g,0,H*T-T*.6,W*T,T*.6,WH,OC,false,0,OT));
  seg([-1,0],false,g=>box(g,g,0,T,T*.6,H*T-T,WH,OC,false,0,OT));
@@ -369,6 +390,19 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   const px=(c.big.x+1.5)*T,grp=new THREE.Group();
   const pm=new THREE.Mesh(new THREE.PlaneGeometry(22,27.5),new THREE.MeshBasicMaterial({map:portraitTex()}));pm.position.set(px,30.5,T+.7);grp.add(pm);
   scene.add(grp);portrait={g:grp,seg:north};meshes.push(pm);}
+ if(pr&&pr.door){const z=pr,d=z.door,sd=z.sides,PC='#ece4d3',PT='#3f7a68',inD=(xx,yy)=>xx>=d.x&&xx<d.x+d.w&&yy>=d.y&&yy<d.y+d.h;
+  const x0=z.x-(sd.w?1:0),x1=z.x+z.w-(sd.e?0:1);
+  const row=(yy,lin)=>g=>{for(let xx=x0;xx<=x1;xx++){if(inD(xx,yy)){if(lin)box(g,g,xx*T,yy*T,T,T,WH-DOORH,PC,false,DOORH,PT)}else if(!lin)box(g,g,xx*T,yy*T,T,T,WH,PC,false,0,PT)}};
+  const col=(xx,lin)=>g=>{for(let yy=z.y;yy<z.y+z.h;yy++){if(inD(xx,yy)){if(lin)box(g,g,xx*T,yy*T,T,T,WH-DOORH,PC,false,DOORH,PT)}else if(!lin)box(g,g,xx*T,yy*T,T,T,WH,PC,false,0,PT)}};
+  if(sd.n){seg([0,-1],true,row(z.y-1,false));seg([0,-1],true,row(z.y-1,true),true)}
+  if(sd.s){seg([0,1],true,row(z.y+z.h,false));seg([0,1],true,row(z.y+z.h,true),true)}
+  if(sd.w){seg([-1,0],true,col(z.x-1,false));seg([-1,0],true,col(z.x-1,true),true)}
+  if(sd.e){seg([1,0],true,col(z.x+z.w,false));seg([1,0],true,col(z.x+z.w,true),true)}
+  // михраб: ниша по диагонали в углу, лицом к коврику
+  const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
+  const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
+  const tex=new THREE.TextureLoader().load('mihrab.jpg');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl)}
  const a=zoneById.asset20;if(a){const tx=(a.table.x+.5)*T,tz=a.table.y*T+2;
   const m1=new THREE.Mesh(new THREE.CylinderGeometry(1,1,11,22),new THREE.MeshBasicMaterial({color:'#6d4c41'}));m1.scale.set(26,1,15);m1.position.set(tx,5.5,tz);scene.add(m1);meshes.push(m1);
   const m2=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.4,22),new THREE.MeshBasicMaterial({color:'#a1887f'}));m2.scale.set(23,1,12.5);m2.position.set(tx,11.2,tz);scene.add(m2);meshes.push(m2)}
@@ -431,7 +465,8 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
 function labelPos(b,fz){const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y,0);return[sx,sy0+3+lv*(fz+6)]}
 function drawLabels(){
  const fz=Math.max(9.5,Math.min(13,8+view.zoom*1.6));
- zones.forEach(z=>{let txt=z.kind==='cabinet'?'Директор':z.name;let[sx,sy]=z.kind==='cabinet'?(z.door.h===1?w2s((z.door.x+z.door.w/2)*T,z.door.y*T+T*.6,0):w2s((z.x+z.w/2)*T,(z.y+z.h)*T+4,0)):w2s(z.x*T+6,z.y*T+4,0);
+ zones.forEach(z=>{let txt=z.kind==='cabinet'?'Директор':z.name;if(z.kind==='prayer'){ctx.font='700 '+(fz+.5)+'px -apple-system,Roboto,sans-serif';const tw=ctx.measureText(z.name).width+22;const[px,py]=w2s((z.x+z.w/2)*T,(z.y+z.h)*T-10,0);ctx.fillStyle='rgba(255,255,255,.93)';rrp(px-tw/2,py-10,tw,19,9.5);ctx.fill();ctx.fillStyle=z.color;ctx.beginPath();ctx.arc(px-tw/2+9,py-.5,4,0,7);ctx.fill();ctx.fillStyle='#1b2040';ctx.textBaseline='middle';ctx.fillText(z.name,px-tw/2+16,py);return}
+  let[sx,sy]=z.kind==='cabinet'?(z.door.h===1?w2s((z.door.x+z.door.w/2)*T,z.door.y*T+T*.6,0):w2s((z.x+z.w/2)*T,(z.y+z.h)*T+4,0)):w2s(z.x*T+6,z.y*T+4,0);
   ctx.font='700 '+(fz+.5)+'px -apple-system,Roboto,sans-serif';const tw=ctx.measureText(txt).width+22;if(z.kind==='cabinet')sx-=tw/2;
   if(z.kind==='cabinet'){ctx.fillStyle='#ffd54f';rrp(sx,sy-10,tw,20,4);ctx.fill();ctx.strokeStyle='#8d6e00';ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle='#3e2723';ctx.textBaseline='middle';ctx.fillText(txt,sx+11,sy+.5);return}
   ctx.fillStyle='rgba(255,255,255,.93)';rrp(sx,sy-1,tw,19,9.5);ctx.fill();ctx.fillStyle=z.color;ctx.beginPath();ctx.arc(sx+9,sy+8.5,4,0,7);ctx.fill();ctx.fillStyle='#1b2040';ctx.textBaseline='middle';ctx.fillText(txt,sx+16,sy+9)});
@@ -463,6 +498,7 @@ setInterval(stats,1000);
 function closeCard(){card.style.display='none';sel=null;selZone=null}
 function showCard(h){card.innerHTML=h;card.style.display='block';card.scrollTop=0;card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]))}
 function openZone(z){sel=null;selZone=z;viewIdx=zones.indexOf(z);setWhere();
+ if(z.kind==='prayer'){showCard(`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.name)}</h2><div class="sub">Тихая комната для намаза</div><div class="row">Джай-намаз постелен по диагонали и смотрит в угол, где в стене ниша-михраб с надписью «Аллах» (الله).</div><button class="back">Вернуться</button>`);card.querySelector('.back').onclick=goAll;fitInto(z.x*T-8,z.y*T-8,z.w*T+16,z.h*T+16,5);return}
  const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.bots;
  const n=zb.length,busy=zb.filter(b=>b.st==='busy').length,today=zb.filter(b=>b.st==='busy'||b.st==='today').length,desk=zb.filter(b=>b.place==='desk'&&b.mode==='seat').length,rest=zb.filter(b=>b.place==='lounge').length,wt=zb.filter(b=>b.place==='bench').length;
  let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='lounge'?`Здесь спят боты, неактивные больше 7 дней: ${n}`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
@@ -579,7 +615,7 @@ document.getElementById('rotl').onclick=()=>rotate(-1);document.getElementById('
 document.getElementById('topv').onclick=()=>setTop(baseView().tilt>=.05);
 document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
 const lg=document.getElementById('legend');
-lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Стены, которые загораживают вид, сами опускаются. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость. В 3D у зоны отдыха слышно храп — чем ближе, тем громче.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли.<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw); храп: «Звук храпа», канал RELAX ОЗВУЧКА (youtu.be/sXttWXUCq1g), YouTube.</span>`;
+lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Стены, которые загораживают вид, сами опускаются. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🕌 Намазхана: маленькая комната для молитвы с джай-намазом и михрабом.<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость. В 3D у зоны отдыха слышно храп — чем ближе, тем громче.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли.<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw); храп: «Звук храпа», канал RELAX ОЗВУЧКА (youtu.be/sXttWXUCq1g), YouTube.</span>`;
 document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};lg.onclick=()=>lg.style.display='none';
 function barH(){document.documentElement.style.setProperty('--barh',(document.getElementById('bar').offsetHeight||52)+'px')}
 function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;renderer.setSize(innerWidth,innerHeight,false);barH();if(pickLayout()&&D){build();build3D();closeCard();viewIdx=-1;setWhere()}if(!viewT&&viewIdx<0&&!sel)fitAll(true)}
