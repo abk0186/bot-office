@@ -60,7 +60,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 </div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=15.1"></script>
+<script src="three.min.js?v=15.2"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -98,7 +98,7 @@ function namazState(){const now=new Date(),ts=prayerTimes(now);const cur=namaz?t
 const shortOf=sl=>{const b=bySlug[sl]||(D&&D.bots||[]).find(x=>x.slug===sl);return b?(b.short||b.name):'—'};
 function namazRows(){const st=namazState();return st.ts.map(p=>{const pl=prayerPlan(p.t,p.id),cur=!!(namaz&&namaz.id===p.id),done=!cur&&st.now-p.t>=pl.len;
  return{...p,done,cur,nx:!st.cur&&st.nx&&st.nx.id===p.id,n:pl.n,imam:shortOf(pl.imam),who:done?`все ${pl.n} · ${shortOf(pl.imam)}`:cur?`группа ${namaz.g+1}/${pl.groups.length}`:''}})}
-let boardTex=null,boardKey='';const boardCv=document.createElement('canvas');boardCv.width=512;boardCv.height=320;
+let boardTex=null,boardKey='',boardTop=null;const boardCv=document.createElement('canvas');boardCv.width=512;boardCv.height=320;
 function paintBoard(){const st=namazState(),rows=namazRows(),k=fmtDM(st.now)+rows.map(r=>(r.done?1:0)+(r.cur?2:0)+(r.nx?4:0)+r.who).join();if(k===boardKey&&boardTex)return;boardKey=k;const c=boardCv.getContext('2d');
  c.fillStyle='#3b2a1a';c.fillRect(0,0,512,320);c.fillStyle='#14382f';c.fillRect(10,10,492,300);c.fillStyle='#f3e6c4';c.font='700 32px -apple-system,Roboto,sans-serif';c.textBaseline='middle';c.textAlign='left';c.fillText('Намаз · Астана',26,42);c.textAlign='right';c.font='600 26px -apple-system,Roboto,sans-serif';c.fillText(fmtDM(st.now),490,42);
  rows.forEach((r,i)=>{const y=92+i*46,hi=r.cur||r.nx;if(hi){c.fillStyle='#e2bb5c';c.fillRect(18,y-21,476,42)}const fg=hi?'#14382f':'#f3e6c4';c.textAlign='left';
@@ -106,20 +106,6 @@ function paintBoard(){const st=namazState(),rows=namazRows(),k=fmtDM(st.now)+row
   c.fillStyle=fg;c.font='700 30px -apple-system,Roboto,sans-serif';c.fillText(r.name,56,y);c.font='600 26px -apple-system,Roboto,sans-serif';c.fillStyle=hi?'#14382f':'#bfe8cf';if(r.who){let t=r.who;while(c.measureText(t).width>170&&t.length>3)t=t.slice(0,-2)+'…';c.fillText(t,200,y)}
   c.fillStyle=fg;c.font='700 30px -apple-system,Roboto,sans-serif';c.textAlign='right';c.fillText(fmtHM(r.t),488,y)});
  if(boardTex)boardTex.needsUpdate=true}
-function drawBoardOverlay(){const z=zoneById.prayer;if(!z)return;const st=namazState(),sd=z.sides||{};
- // табло висит на ВНУТРЕННЕЙ восточной стене намазханы; оверлей — его читаемая копия на том же месте
- const ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6,bw=Math.min(52,z.h*T-12),bh=bw*320/512,cz=(z.y+z.h/2)*T,top=view.tilt>=.1;
- const a=w2s(ex,cz-bw/2,WH-5-bh/2),b=w2s(ex,cz+bw/2,WH-5-bh/2);if(top&&Math.hypot(a[0]-b[0],a[1]-b[1])>150)return; // вблизи само табло на стене читаемо
- const r0=w2s(z.x*T,cz,0),r1=w2s((z.x+z.w)*T,cz,0),roomW=Math.hypot(r1[0]-r0[0],r1[1]-r0[1]);
- const w=Math.max(96,Math.min(160,roomW*.8)),s=w/150,lh=14*s,h=lh*6+10*s;
- const[ax,ay]=w2s(ex-z.w*T*.33,cz,top?30:0);let x=ax-w/2,y=top?ay-h:ay-h/2; // в 3D — выше голов молящихсяif(x+w<0||y>vh()||x>vw()||y+h<0)return;octx.save();octx.fillStyle='rgba(20,56,47,.94)';rrp(x,y,w,h,6*s);octx.fill();octx.strokeStyle='#e2bb5c';octx.lineWidth=1.2;octx.stroke();
- octx.textBaseline='middle';octx.fillStyle='#f3e6c4';octx.font='700 '+(10.5*s)+'px -apple-system,Roboto,sans-serif';octx.textAlign='left';octx.fillText('Намаз',x+7*s,y+5*s+lh/2);octx.textAlign='right';octx.font='600 '+(9.5*s)+'px -apple-system,Roboto,sans-serif';octx.fillText(fmtDM(st.now),x+w-7*s,y+5*s+lh/2);
- namazRows().forEach((p,i)=>{const yy=y+5*s+lh*(i+1)+lh/2,hi=p.cur||p.nx;if(hi){octx.fillStyle='#e2bb5c';rrp(x+3*s,yy-lh/2+1,w-6*s,lh-2,3);octx.fill()}const fg=hi?'#14382f':'#f3e6c4';
-  octx.textAlign='left';octx.font='800 '+(10.5*s)+'px -apple-system,Roboto,sans-serif';octx.fillStyle=hi?fg:'#8be0a4';octx.fillText(p.done?'✓':p.cur?'●':'',x+6*s,yy);
-  octx.fillStyle=fg;octx.font=(hi?'800 ':'600 ')+(10.5*s)+'px -apple-system,Roboto,sans-serif';octx.fillText(p.name,x+17*s,yy);
-  if(p.who){octx.font='600 '+(8.5*s)+'px -apple-system,Roboto,sans-serif';octx.fillStyle=hi?fg:'#bfe8cf';let t=p.who;while(octx.measureText(t).width>70*s&&t.length>3)t=t.slice(0,-2)+'…';octx.fillText(t,x+56*s,yy)}
-  octx.fillStyle=fg;octx.font=(hi?'800 ':'600 ')+(10.5*s)+'px -apple-system,Roboto,sans-serif';octx.textAlign='right';octx.fillText(fmtHM(p.t),x+w-7*s,yy)});
- octx.restore();octx.textAlign='left'}
 // ---------- время/формат
 const pad=n=>String(n).padStart(2,'0');
 const ast=ms=>new Date(ms+5*3600e3);
@@ -445,7 +431,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.1';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.2';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -502,16 +488,18 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.1');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.2');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
-  const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd)}
+  const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
+  // вид сверху: то же табло лежит на верхней кромке этой же стены (на линии стены)
+  const th=sd.e?T:T*.6,wx=sd.e?(z.x+z.w)*T+T/2:W*T-T*.3;const bt=new THREE.Mesh(new THREE.PlaneGeometry(bw,th-1),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bt.rotation.set(-Math.PI/2,0,Math.PI/2);bt.position.set(wx,WH+.3,(z.y+z.h/2)*T);scene.add(bt);meshes.push(bt);boardTop=bt}
  const a=zoneById.asset20;if(a){const tx=(a.table.x+.5)*T,tz=a.table.y*T+2;
   const m1=new THREE.Mesh(new THREE.CylinderGeometry(1,1,11,22),new THREE.MeshBasicMaterial({color:'#6d4c41'}));m1.scale.set(26,1,15);m1.position.set(tx,5.5,tz);scene.add(m1);meshes.push(m1);
   const m2=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.4,22),new THREE.MeshBasicMaterial({color:'#a1887f'}));m2.scale.set(23,1,12.5);m2.position.set(tx,11.2,tz);scene.add(m2);meshes.push(m2)}
  buildMonitors();buildSprites()}
 // стены всегда стоят в полный рост (без авто-среза)
-function updateWalls(dt){const sx=Math.sin(view.az),sz=Math.cos(view.az),on=view.tilt>.1;
+function updateWalls(dt){if(boardTop)boardTop.visible=view.tilt<.1;const sx=Math.sin(view.az),sz=Math.cos(view.az),on=view.tilt>.1;
  wallSegs.forEach(s=>{const d=s.n[0]*sx+s.n[1]*sz;const cut=false;/* стены всегда в полный рост: ракурс выбирается вращением */const tg=cut?.17:1;s.k+=(tg-s.k)*Math.min(1,dt*.01);if(s.lintel){s.m.visible=s.k>.6}else s.m.scale.y=s.k});
  if(portrait)portrait.g.visible=portrait.seg.k>.6}
 function monitor(g,x,z,w,h,scr,y0){box(g,g,x+w/2-1,z+.5,2,1,2,'#2a2f3a',false,y0);box(g,g,x,z,w,2,h,'#2a2f3a',false,y0+2);quad(g,[[x+1,y0+3,z-.25],[x+w-1,y0+3,z-.25],[x+w-1,y0+1+h,z-.25],[x+1,y0+1+h,z-.25]],shade(scr,1))}
@@ -572,7 +560,7 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
   octx.fillStyle='rgba(30,90,70,.92)';rrp(px-tw/2,py-11,tw,20,10);octx.fill();octx.fillStyle='#fff';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,px-tw/2+9,py)}
  const cz=zoneById.cabinet;if(cz&&cz.reception){const rc=cz.reception;const[rx,ry]=w2s((rc.x+1)*T,(rc.y+2)*T+2,0);const t='Приёмная';octx.font='700 11px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+14;
   octx.fillStyle='rgba(255,213,79,.95)';rrp(rx-tw/2,ry-9,tw,17,8);octx.fill();octx.fillStyle='#3e2723';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,rx-tw/2+7,ry)}
- drawBoardOverlay();drawLabels();drawSpeech()}
+ drawLabels();drawSpeech()}
 function labelPos(b,fz){const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y,0);return[sx,sy0+3+lv*(fz+6)]}
 function drawLabels(){
  const fz=Math.max(9.5,Math.min(13,8+view.zoom*1.6));
@@ -596,7 +584,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='15.1';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15.2';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
