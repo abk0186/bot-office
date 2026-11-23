@@ -20,3 +20,6 @@
 - Канал: RELAX ОЗВУЧКА (YouTube), https://youtu.be/sXttWXUCq1g
 - Использован фрагмент около 10:01–10:38, петля 36,7 с, громкость нормализована, моно.
 - Лицензия: в описании видео не указана, на YouTube стандартная лицензия (не CC).
+
+## audio/voice/*.mp3 — голоса ботов
+- Синтез речи Microsoft Edge (edge-tts), голоса ru-RU-DmitryNeural и ru-RU-SvetlanaNeural; фразы — общие по ролям ботов.

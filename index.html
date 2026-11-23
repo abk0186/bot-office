@@ -497,16 +497,17 @@ const SND={ctx:null,gain:null,an:null,el:null,level:+(localStorage.getItem('botO
 const LEVELS=[0,.3,.55,.8],ICON=['🔇','🔈','🔉','🔊'],LNAME=['звук выключен','тихо','средне','погромче'];
 function sndSrc(){const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'audio/ambient.ogg':'audio/ambient.m4a'}
 function sndInit(){if(SND.el)return;const el=new Audio();el.loop=true;el.preload='auto';el.src=sndSrc();SND.el=el;
+ try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){} // iOS: играть и в беззвучном режиме
  const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
  try{const c=new C(),src=c.createMediaElementSource(el),g=c.createGain(),an=c.createAnalyser();g.gain.value=0;an.fftSize=512;src.connect(g);g.connect(c.destination);g.connect(an);SND.ctx=c;SND.gain=g;SND.an=an}catch(e){SND.ctx=null}}
 function sndApply(){const on=SND.level>0&&!document.hidden;if(on)sndInit();if(!SND.el)return;const v=on?LEVELS[SND.level]:0;
  if(SND.ctx){const c=SND.ctx;if(on&&c.state!=='running')c.resume();SND.gain.gain.cancelScheduledValues(c.currentTime);SND.gain.gain.setTargetAtTime(v,c.currentTime,.3)}else SND.el.volume=v;
  if(on){const p=SND.el.play();if(p&&p.catch)p.catch(()=>{})}else setTimeout(()=>{if(SND.level===0||document.hidden){SND.el.pause();if(SND.ctx&&SND.ctx.state==='running')SND.ctx.suspend()}},800)}
 function sndBtn(){const b=document.getElementById('snd');b.textContent=ICON[SND.level];b.classList.toggle('on',SND.level>0);b.title=LNAME[SND.level]}
-document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;if(!SND.level&&window.speechSynthesis)speechSynthesis.cancel();localStorage.setItem('botOfficeSound',SND.level);sndApply();sndBtn()};
+document.getElementById('snd').onclick=()=>{SND.level=(SND.level+1)%4;if(!SND.level){if(window.speechSynthesis)speechSynthesis.cancel();if(VO.el)VO.el.pause()}else voiceUnlock();localStorage.setItem('botOfficeSound',SND.level);sndApply();sndBtn()};
 document.addEventListener('visibilitychange',sndApply);
 // при сохранённом «включено» браузер требует жест: включаем по первому касанию
-['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(){if(SND.level>0)sndApply();removeEventListener(ev,f,true)},true));
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(e){if(SND.level>0&&!(e.target&&e.target.id==='snd')){sndApply();voiceUnlock()}removeEventListener(ev,f,true)},true));
 sndBtn();
 // ---------- храп у зоны отдыха (только 3D, только со звуком, громче при приближении)
 function snoreSrc(){const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'audio/snore.ogg':'audio/snore.m4a'}
@@ -527,7 +528,15 @@ function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
 let ruVoice=null;function voiceRU(){if(ruVoice||!window.speechSynthesis)return ruVoice;ruVoice=speechSynthesis.getVoices().find(v=>/^ru/i.test(v.lang))||null;return ruVoice}
 if(window.speechSynthesis&&speechSynthesis.addEventListener)speechSynthesis.addEventListener('voiceschanged',()=>{ruVoice=null;voiceRU()});
 function duck(on){speaking=on;if(SND.ctx&&SND.gain&&SND.level>0){SND.gain.gain.setTargetAtTime(LEVELS[SND.level]*(on?.35:1),SND.ctx.currentTime,.2)}}
-function say(b,t){if(!(SND.level>0)||document.hidden||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';const v=voiceRU();if(v)u.voice=v;
+// голос: заранее записанные фразы (audio/voice/*.mp3, gen_voice.py), один <audio>, разблокированный тапом по кнопке звука
+const VO={el:null,map:null,loading:false,last:null,err:null};
+function voiceMap(){if(VO.map||VO.loading)return;VO.loading=true;fetch('audio/voice/index.json').then(r=>r.json()).then(m=>{VO.map=m}).catch(()=>{}).finally(()=>{VO.loading=false})}
+function voiceUnlock(){if(!VO.el){VO.el=new Audio();VO.el.preload='auto';VO.el.setAttribute('playsinline','')}if(!VO.unlocked){VO.el.src='audio/voice/silence.mp3';const q=VO.el.play();if(q&&q.then)q.then(()=>{VO.unlocked=true}).catch(()=>{});else VO.unlocked=true}voiceMap()}
+function say(b,t){if(!(SND.level>0)||document.hidden)return;voiceMap();const m=VO.map,p=m&&m.bots[b.slug],h=p&&m.files[p+'|'+t];
+ if(h&&VO.el){const el=VO.el;el.onended=el.onerror=el.onpause=null;el.pause();el.src='audio/voice/'+h+'.mp3';el.volume=Math.min(1,.5+LEVELS[SND.level]*.6);
+  el.onplaying=()=>duck(true);el.onended=el.onerror=el.onpause=()=>duck(false);VO.last=h;const q=el.play();if(q&&q.catch)q.catch(e=>{VO.err=String(e);duck(false);ttsSay(b,t)});return}
+ ttsSay(b,t)}
+function ttsSay(b,t){if(!(SND.level>0)||document.hidden||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='ru-RU';const v=voiceRU();if(v)u.voice=v;
  u.rate=1.05;u.pitch=.8+(hsh(b.slug)%50)/100;u.volume=Math.min(1,.6+LEVELS[SND.level]*.5);u.onstart=()=>duck(true);u.onend=u.onerror=()=>duck(false);speechSynthesis.speak(u)}catch(e){duck(false)}}
 function talkTick(dt){talkT-=dt;if(talkT>0)return;talkT=400;if(speech&&performance.now()>speech.until)speech=null;
  if(!D||view.tilt<.1||ptrs.size)return;if(vw()/view.zoom>190)return; // далеко — молчат
