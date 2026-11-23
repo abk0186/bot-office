@@ -60,14 +60,14 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 </div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=13"></script>
+<script src="three.min.js?v=14"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
 const cv=document.getElementById('c'),octx=cv.getContext('2d'),gcv=document.getElementById('g'),card=document.getElementById('card');
 let ctx=octx;const floorCv=document.createElement('canvas'),fctx=floorCv.getContext('2d');
 let D=null,LAY=null,L=null,W=24,H=36,zones=[],zoneById={},bots=[],bySlug={},links=[];
-let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool={},bench=[],lounge=[],sofas=[];
+let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool={},bench=[],lounge=[],sofas=[],games=[],gameSlots=[],gamers=new Map(),gameT=0;
 let view={tx:200,tz:300,az:0,tilt:.72,zoom:1},viewT=null,paused=false,sel=null,selZone=null,viewIdx=-1,animTime=0,schedT=0;
 // ---------- время/формат
 const pad=n=>String(n).padStart(2,'0');
@@ -89,7 +89,7 @@ const key=(x,y)=>y*W+x;
 function block(x,y){if(x>=0&&y>=0&&x<W&&y<H)blocked[key(x,y)]=1}
 const free=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&!blocked[key(x,y)];
 function build(){
- if(!D)return;L=D.layouts[LAY];W=L.W;H=L.H;blocked=new Uint8Array(W*H);seatSet=new Set();reserved=new Set();decor=[];bench=[];lounge=[];sofas=[];
+ if(!D)return;L=D.layouts[LAY];W=L.W;H=L.H;blocked=new Uint8Array(W*H);seatSet=new Set();reserved=new Set();decor=[];bench=[];lounge=[];sofas=[];games=[];gameSlots=[];
  for(let x=0;x<W;x++){block(x,0);block(x,H-1)}for(let y=0;y<H;y++){block(0,y);block(W-1,y)}
  zones=D.zones.filter(z=>L.zones[z.id]).map(z=>{const[x,y,w,h]=L.zones[z.id];return Object.assign({},z,{x,y,w,h,bots:[]})});zoneById={};zones.forEach(z=>zoneById[z.id]=z);
  const prev={};bots.forEach(b=>prev[b.slug]=b);
@@ -121,6 +121,11 @@ function build(){
    if(sd.w)for(let y=z.y;y<z.y+z.h;y++)add(z.x-1,y);if(sd.e)for(let y=z.y;y<z.y+z.h;y++)add(z.x+z.w,y);
    for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++)block(x,y); // внутрь боты не заходят
    decor.push({t:'shoes',x:z.x+z.w-1,y:z.y+z.h-1});
+  }else if(z.kind==='games'){ // игровая: бильярд, настольный футбол, пинг-понг
+   (L.games||[]).forEach(g=>{const[t,x,y,w,h]=g;const tb={t,x,y,w,h};
+    tb.slots=t==='foos'?[[x,y-1],[x+w-1,y+h]]:[[x-1,y],[x+w,y+h-1]];
+    let ok=tb.slots.every(q=>free(q[0],q[1]));for(let i=0;i<w*h;i++)if(!free(x+i%w,y+(i/w|0)))ok=false;if(!ok)return;
+    for(let i=0;i<w*h;i++)block(x+i%w,y+(i/w|0));tb.si=gameSlots.length;tb.slots.forEach((q,j)=>gameSlots.push({x:q[0],y:q[1],tb,j}));games.push(tb)});
   }else if(z.kind==='lounge'){
    const rowsY=z.h>=5?[z.y+1,z.y+3]:[z.y+1];
    rowsY.forEach((ry,ri)=>{for(let sx=z.x+1+ri;sx<=z.x+z.w-2;sx+=2){lounge.push({x:sx,y:ry});sofas.push({x:sx,y:ry,w:1})}});
@@ -143,9 +148,9 @@ function build(){
  extra.forEach(e=>{let ok=true;for(let i=0;i<e.w;i++)if(!free(e.x+i,e.y))ok=false;if(ok){for(let i=0;i<e.w;i++)block(e.x+i,e.y);decor.push(e)}});
  bots.forEach(b=>{seatSet.add(key(b.seat.x,b.seat.y));const p=prev[b.slug];
   b.x=b.sit.x;b.y=b.sit.y;b.mode='seat';b.talkWith=null;b.lock=0;b.deskSeat=b.seat;b.deskSit=b.sit;b.place='desk';b.slot=null});
- bench.concat(lounge).forEach(t=>seatSet.add(key(t.x,t.y)));
+ bench.concat(lounge,gameSlots).forEach(t=>seatSet.add(key(t.x,t.y)));
  Object.values(zoneById).forEach(z=>{if(z.bossSeat)seatSet.add(key(z.bossSeat.x,z.bossSeat.y))});
- computeCand();assignPlaces(true);
+ computeCand();pickGamers();gameT=50000;assignPlaces(true);
 }
 function computeCand(){
  // кандидаты визитов из реальных сообщений между ботами
@@ -157,12 +162,18 @@ function computeCand(){
  const g=(D.groups||[]).find(g=>g.slug==='asset20');
  if(g&&g.act&&g.act.last&&bySlug.director){const age=(Date.now()-g.act.last)/36e5;if(age<24*7)cand.push({v:'director',t:'asset20',w:age<24?6:2,n:g.act.d7,last:g.act.last})}
 }
-function desired(b){if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(b.st==='sleep')return 'lounge';return 'desk'}
-function assignPlaces(instant){const used={bench:new Set(),lounge:new Set()};
+const canPlay=b=>!b.boss&&!waitOn(b)&&(b.st==='sleep'||b.st==='week');
+function pickGamers(){gamers=new Map();if(!games.length)return;
+ const c=bots.filter(b=>canPlay(b)&&(b.mode==='seat'||b.place==='games'));for(let i=c.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[c[i],c[j]]=[c[j],c[i]]}
+ const n=Math.min(games.length,Math.max(c.length>=2?1:0,Math.floor(c.length/4)));const tb=games.slice().sort(()=>Math.random()-.5);
+ for(let i=0;i<n;i++){gamers.set(c[2*i].slug,tb[i].si);gamers.set(c[2*i+1].slug,tb[i].si+1)}}
+function desired(b){if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='sleep')return 'lounge';return 'desk'}
+function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set()};
  bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
- bots.forEach(b=>{const d=desired(b);if(d===b.place)return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
-  if(d!=='desk'){const arr=d==='bench'?bench:lounge;const i=arr.findIndex((t,k)=>!used[d].has(k));if(i>=0){used[d].add(i);place=d;slot=i;seat={x:arr[i].x,y:arr[i].y};sit=anchor(arr[i].x,arr[i].y)}}
-  if(place===b.place)return;const from=b.seat;b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
+ bots.forEach(b=>{const d=desired(b);if(d===b.place&&(d!=='games'||b.slot===gamers.get(b.slug)))return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
+  if(d==='games'){const i=gamers.get(b.slug),q=gameSlots[i];place='games';slot=i;seat={x:q.x,y:q.y};sit=anchor(q.x,q.y)}
+  else if(d!=='desk'){const arr=d==='bench'?bench:lounge;const i=arr.findIndex((t,k)=>!used[d].has(k));if(i>=0){used[d].add(i);place=d;slot=i;seat={x:arr[i].x,y:arr[i].y};sit=anchor(arr[i].x,arr[i].y)}}
+  if(place===b.place&&slot===b.slot)return;const from=b.seat;b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
   if(instant){b.x=sit.x;b.y=sit.y;b.mode='seat';return}
   if(b.mode!=='seat')return;const path=bfs(from.x,from.y,[[seat.x,seat.y]]);b.pts=path?path.map(p=>anchor(p[0],p[1])):[];b.pts.push({x:sit.x,y:sit.y});b.mode='back'})}
 const standOf=t=>t.place==='desk'?t.stand:nbrs(t.seat.x,t.seat.y);
@@ -330,6 +341,31 @@ function geoFrom(g){const geo=new THREE.BufferGeometry();geo.setAttribute('posit
 function mkMesh(g,mat,ro){const m=new THREE.Mesh(geoFrom(g),mat);if(ro)m.renderOrder=ro;scene.add(m);meshes.push(m);return m}
 function paintDesk(b){const x=b.desk.x*T,y=b.desk.y*T;R(x,y-4,32,16,'#a77a52');R(x,y-4,32,2,'#c4996c');R(x+10,y+6,12,3,'#e0e0e0');R(x+10,y+6,12,1,'#bdbdbd');prop(b.prop,x,y+9)}
 function paintBig(c){const x=c.big.x*T,y=c.big.y*T;R(x,y-4,48,30,'#6d4c41');R(x,y-4,48,3,'#8d6e63');R(x+2,y+4,44,1,'#5d4037');R(x+16,y+12,16,6,'#ffd54f');R(x+17,y+13,14,4,'#3e2723');R(x+6,y+14,6,5,'#fff');R(x+38,y+12,5,8,'#2e7d32')}
+// игровая: верх столов рисуется на полу (в 3D это крышка стола)
+const gRect=tb=>({X:tb.x*T+1,Z:tb.y*T+1,Wd:tb.w*T-2,Dd:tb.h*T-2,H:tb.t==='billiard'?12:tb.t==='foos'?13:11});
+function circ(x,y,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill()}
+function paintGame(tb){const{X,Z,Wd,Dd}=gRect(tb);
+ if(tb.t==='billiard'){R(X,Z,Wd,Dd,'#6b3f1d');R(X+3,Z+3,Wd-6,Dd-6,'#1e8a45');[[X+3,Z+3],[X+Wd/2,Z+2.5],[X+Wd-3,Z+3],[X+3,Z+Dd-3],[X+Wd/2,Z+Dd-2.5],[X+Wd-3,Z+Dd-3]].forEach(q=>circ(q[0],q[1],2.2,'#111'));
+  const cx=X+Wd*.68,cz=Z+Dd/2;[[0,0,'#f9a825'],[2.6,-1.6,'#c62828'],[2.6,1.6,'#1565c0'],[5.2,-3.2,'#6a1b9a'],[5.2,0,'#111'],[5.2,3.2,'#ef6c00']].forEach(b=>circ(cx+b[0],cz+b[1],1.3,b[2]));R(X+Wd*.25,Z+4,1,Dd-8,'rgba(255,255,255,.35)')}
+ else if(tb.t==='foos'){R(X,Z,Wd,Dd,'#455a64');R(X+2,Z+2,Wd-4,Dd-4,'#2e9d4f');R(X+Wd/2-.5,Z+2,1,Dd-4,'#fff');R(X+2,Z+Dd/2-3,1.5,6,'#fff');R(X+Wd-3.5,Z+Dd/2-3,1.5,6,'#fff');ctx.strokeStyle='#fff';ctx.lineWidth=.8;ctx.beginPath();ctx.arc(X+Wd/2,Z+Dd/2,3,0,7);ctx.stroke()}
+ else{R(X,Z,Wd,Dd,'#1565c0');ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(X+1,Z+1,Wd-2,Dd-2);R(X+1,Z+Dd/2-.4,Wd-2,.8,'#fff');R(X+Wd/2-.8,Z,1.6,Dd,'#eceff1')}}
+const GAMEPH=['Мой удар!','Гол!','Ещё партию?','Твоя подача.','Шар в лузу!','Реванш?','Счёт 3:2, я веду.','Это был рикошет!'];
+// анимация игр поверх 3D: кий, шарик, штанги футбола, мяч пинг-понга
+function drawGames(){const lw=Math.max(1,Math.min(3,view.zoom*1.1));
+ games.forEach(tb=>{const pl=[0,1].map(j=>bots.find(b=>b.place==='games'&&b.slot===tb.si+j&&b.mode==='seat'&&Math.hypot(b.x-b.sit.x,b.y-b.sit.y)<3));if(!pl[0]||!pl[1])return;
+  const{X,Z,Wd,Dd,H}=gRect(tb);const ln=(a,b,c,w)=>{const p=w2s(a[0],a[1],a[2]),q=w2s(b[0],b[1],b[2]);octx.strokeStyle=c;octx.lineWidth=w;octx.beginPath();octx.moveTo(p[0],p[1]);octx.lineTo(q[0],q[1]);octx.stroke()};
+  const dot=(x,z,h,r,c)=>{const p=w2s(x,z,h);octx.fillStyle=c;octx.beginPath();octx.arc(p[0],p[1],r*Math.max(.8,view.zoom),0,7);octx.fill()};
+  if(tb.t==='billiard'){const sh=(animTime/4200|0)%2,p=(animTime%4200)/4200,b=pl[sh],dir=sh?-1:1;
+   const pull=p<.45?Math.sin(p/.45*Math.PI*3)*3-p*8:p<.52?-3.6+(p-.45)/.07*9:5.4;const tipX=(sh?X+Wd-3:X+3)+dir*(6+pull),tz=b.y-T*.35;
+   ln([tipX,tz,H+1.5],[tipX-dir*42,tz,H+9],'#d7b07a',lw*1.4);ln([tipX,tz,H+1.5],[tipX-dir*3,tz,H+2],'#fafafa',lw*1.4);
+   const bp=p<.52?0:Math.min(1,(p-.52)/.4),e=1-Math.pow(1-bp,2.5);dot((sh?X+Wd-8:X+8)+dir*(Wd-24)*e,tz,H+1,1.6,'#fff')}
+  else if(tb.t==='foos'){for(let i=0;i<4;i++){const rx=X+Wd*(i+1)/5,off=Math.sin(animTime/260+i*1.7)*3,col=i%2?'#1565c0':'#c62828';
+    ln([rx,Z-6,H+3],[rx,Z+Dd+6,H+3],'#cfd8dc',lw);for(let f=0;f<2;f++){const fz=Z+Dd*(f+1)/3+off;ln([rx,fz,H+.5],[rx,fz,H+5],col,lw*2.2)}}
+   const bx=X+Wd/2+Math.sin(animTime/700)*Wd*.35,bz=Z+Dd/2+Math.sin(animTime/430)*Dd*.25;dot(bx,bz,H+1,1.3,'#fff')}
+  else{const per=1700,ph=(animTime%(2*per))/per,fw=ph<1,t=fw?ph:ph-1;const a=fw?pl[0]:pl[1],c=fw?pl[1]:pl[0];
+   const ax=fw?X+2:X+Wd-2,cx=fw?X+Wd-2:X+2,az=a.y-T*.35,cz=c.y-T*.35,bx=ax+(cx-ax)*t,bz=az+(cz-az)*t,hgt=H+3+Math.abs(Math.sin(t*Math.PI*2))*9;
+   ln([X+Wd/2,Z,H],[X+Wd/2,Z+Dd,H],'#eceff1',lw);ln([X+Wd/2,Z,H+3],[X+Wd/2,Z+Dd,H+3],'#eceff1',lw);
+   dot(ax-(fw?2:-2),az,H+6,2.2,'#d32f2f');dot(cx+(fw?2:-2),cz,H+6,2.2,'#d32f2f');dot(bx,bz,hgt,1.3,'#fff59d')}})}
 // джай-намаз: по диагонали, головой к углу с михрабом
 function drawRug(z){ctx.save();ctx.translate(z.x*T+27,z.y*T+27);ctx.rotate(-Math.PI/4);const w=17,l=30;
  R(-w/2,-l/2,w,l,'#6d1a26');R(-w/2+1.2,-l/2+1.2,w-2.4,l-2.4,'#b03a4e');R(-w/2+2.8,-l/2+2.8,w-5.6,l-5.6,'#7d1f2e');
@@ -338,7 +374,7 @@ function drawRug(z){ctx.save();ctx.translate(z.x*T+27,z.y*T+27);ctx.rotate(-Math
  for(let i=-w/2+1;i<w/2;i+=2){R(i,-l/2-1.6,.8,1.6,'#f3ead6');R(i,l/2,.8,1.6,'#f3ead6')}
  ctx.restore()}
 function paintFloor(){floorCv.width=W*T*FS;floorCv.height=H*T*FS;ctx=fctx;fctx.setTransform(FS,0,0,FS,0,0);fctx.imageSmoothingEnabled=false;
- drawWorld();bots.forEach(b=>{if(b.kind==='desk')paintDesk(b)});decor.forEach(d=>drawDecor(d));const c=zoneById.cabinet;if(c)paintBig(c);const a=zoneById.asset20;if(a)drawTable(a);const pz=zoneById.prayer;if(pz)drawRug(pz);ctx=octx}
+ drawWorld();bots.forEach(b=>{if(b.kind==='desk')paintDesk(b)});decor.forEach(d=>drawDecor(d));const c=zoneById.cabinet;if(c)paintBig(c);const a=zoneById.asset20;if(a)drawTable(a);const pz=zoneById.prayer;if(pz)drawRug(pz);games.forEach(paintGame);ctx=octx}
 const WH=46,DOORH=33; // высота стен ~3 м, двери ~2.1 м (бот ~1.75 м = 27)
 let wallSegs=[],portrait=null;
 const matSolid=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide});
@@ -348,7 +384,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=13';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=14';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -374,6 +410,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   else if(d.t==='shoes')box(top,side,x+1,y+2,14,9,6,'#6d4c41',true)});
  sofas.forEach(f=>{box(top,side,f.x*T-5,f.y*T-4,T+10,16,7,'#5e35b1',true);box(side,side,f.x*T-5,f.y*T-8,T+10,4,15,'#4527a0',false)});
  if(bench.length){const x=bench[0].x*T,y=bench[0].y*T,w=(bench[bench.length-1].x-bench[0].x+1)*T;box(top,side,x-2,y-6,w+4,17,7,'#b37800',true)}
+ games.forEach(tb=>{const{X,Z,Wd,Dd,H}=gRect(tb);box(top,side,X,Z,Wd,Dd,H,tb.t==='billiard'?'#5a3418':tb.t==='foos'?'#37474f':'#0d47a1',true);if(tb.t==='pong')box(side,side,X+Wd/2-.5,Z-1,1,Dd+2,3,'#eceff1',false,H)});
  mkMesh(top,matTop);mkMesh(side,matSide);mkMesh(glass,matWall,2);
  // высокие стены: каждая — отдельный кусок, чтобы прятать те, что между камерой и комнатой
  const OC='#9aa3c4',OT='#2b3350',CC='#c8a27a',CT='#3e2a1a';
@@ -404,7 +441,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=13');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=14');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl)}
  const a=zoneById.asset20;if(a){const tx=(a.table.x+.5)*T,tz=a.table.y*T+2;
   const m1=new THREE.Mesh(new THREE.CylinderGeometry(1,1,11,22),new THREE.MeshBasicMaterial({color:'#6d4c41'}));m1.scale.set(26,1,15);m1.position.set(tx,5.5,tz);scene.add(m1);meshes.push(m1);
@@ -428,8 +465,8 @@ function isBust(b){return b.mode==='seat'&&b.place==='desk'&&Math.abs(b.x-b.sit.
 function botH(b){return isBust(b)?4:(b.mode==='seat'?3:.5)}
 function headH(b){return botH(b)+(isBust(b)?21:26)}
 function updateSprites(){bots.forEach(b=>{const s=spr.get(b.slug);if(!s)return;const bust=isBust(b);const moving=(b.mode==='go'||b.mode==='back')&&b.pts&&b.pts.length;
- const i=bust?3:(moving?((animTime/160|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
- s.obj.scale.set(16,bust?21:27,1);s.obj.position.set(b.x,botH(b),b.y)})}
+ const play=b.place==='games'&&b.mode==='seat';const i=bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
+ s.obj.scale.set(16,bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),botH(b),b.y)})}
 // ---------- камера (орбита)
 const TILT3D=.72;
 const _v=new THREE.Vector3(),_o=new THREE.Vector3(),_d=new THREE.Vector3();
@@ -453,12 +490,12 @@ function setTop(on){const b=baseView();if(on){b.tilt=0;b.az=0}else b.tilt=TILT3D
 function topBtn(){const b=document.getElementById('topv');const t=(viewT?viewT.to:view).tilt<.05;const s=t?'3D':'Сверху';if(b.textContent!==s){b.textContent=s;b.classList.toggle('on',t)}}
 // ---------- оверлей: подписи и значки поверх 3D
 function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRect(0,0,vw(),vh());
- const k=Math.max(.75,Math.min(2.2,view.zoom*.9)),cy=Math.max(.35,Math.cos(view.tilt));
+ const k=Math.max(.75,Math.min(2.2,view.zoom*.9)),cy=Math.max(.35,Math.cos(view.tilt));drawGames();
  bots.forEach(b=>{if(sel&&sel.slug===b.slug){const[fx,fy]=w2s(b.x,b.y,0);octx.strokeStyle='#ff3d00';octx.lineWidth=2;octx.beginPath();octx.ellipse(fx,fy,11*k,11*k*cy*.55,0,0,7);octx.stroke()}});
  bots.forEach(b=>{const[hx,hy]=w2s(b.x,b.y,headH(b));octx.save();octx.translate(hx,hy);octx.scale(k,k);const X=0,Y=-2;
   if(waitOn(b)&&b.mode==='seat'){const p=.5+.5*Math.sin(animTime/300);octx.save();octx.shadowColor='#ffab00';octx.shadowBlur=6+6*p;octx.fillStyle='#ffab00';octx.beginPath();octx.arc(X,Y-4,6+p,0,7);octx.fill();octx.restore();octx.fillStyle='#3e2723';octx.font='bold 9px sans-serif';octx.textAlign='center';octx.fillText('?',X,Y-1);octx.textAlign='left'}
   else if(b.st==='busy')bulb(X,Y-4);
-  else if(b.st==='sleep'&&b.mode==='seat'){octx.fillStyle='#c5d0ff';octx.font='bold 9px monospace';const o=(animTime/600)%3;octx.fillText('z',X+8,Y+6-o);octx.fillText('Z',X+12,Y-2-o)}
+  else if(b.st==='sleep'&&b.mode==='seat'&&b.place!=='games'){octx.fillStyle='#c5d0ff';octx.font='bold 9px monospace';const o=(animTime/600)%3;octx.fillText('z',X+8,Y+6-o);octx.fillText('Z',X+12,Y-2-o)}
   if(b.mode==='talk')bubble(X,Y-2);
   if(waiting(b)&&b.mode==='seat'&&b.st!=='busy'&&b.place!=='bench'){R(X+8,Y+2,10,7,'#fff');octx.strokeStyle='#c62828';octx.lineWidth=1;octx.beginPath();octx.moveTo(X+8,Y+2);octx.lineTo(X+13,Y+6);octx.lineTo(X+18,Y+2);octx.stroke()}
   if((b.act.routines||[]).some(r=>r.state==='работает')&&b.mode==='seat'){octx.fillStyle='#fff';octx.beginPath();octx.arc(X-11,Y+9,4,0,7);octx.fill();octx.strokeStyle='#3047b8';octx.lineWidth=1.2;octx.beginPath();octx.moveTo(X-11,Y+9);octx.lineTo(X-11,Y+6.5);octx.moveTo(X-11,Y+9);octx.lineTo(X-9,Y+9);octx.stroke()}
@@ -484,19 +521,19 @@ let lastT=performance.now();
 function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
  if(viewT){const k=Math.min(1,(now-viewT.t)/viewT.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2,f=viewT.from,t=viewT.to;const da=((t.az-f.az+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
   view={tx:f.tx+(t.tx-f.tx)*e,tz:f.tz+(t.tz-f.tz)*e,az:f.az+da*e,tilt:f.tilt+(t.tilt-f.tilt)*e,zoom:f.zoom+(t.zoom-f.zoom)*e};if(k>=1){view={...t};viewT=null}}
- if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt))}snoreTick(dt);
+ if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));gameT-=dt;if(gameT<=0){gameT=45000+Math.random()*25000;pickGamers();assignPlaces(false)}}snoreTick(dt);
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='13';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='14';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
   stats()}catch(e){if(!D){const el=document.getElementById('err');el.style.display='block';el.textContent='Не удалось загрузить данные'}}}
 function rebuildCand(){computeCand();assignPlaces(false);buildMonitors()}
 function stats(){if(!D)return;const busy=bots.filter(b=>b.st==='busy').length,today=bots.filter(b=>b.st==='busy'||b.st==='today').length,walk=bots.filter(b=>b.mode!=='seat').length;
- const wt=bots.filter(waitOn).length,rest=bots.filter(b=>b.place==='lounge').length;
- document.getElementById('stats').innerHTML=`<b style="color:#ffb300">Ждут тебя ${wt}</b> • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk} • Отдыхают ${rest}`;
+ const wt=bots.filter(waitOn).length,rest=bots.filter(b=>b.place==='lounge').length,play=bots.filter(b=>b.place==='games').length;
+ document.getElementById('stats').innerHTML=`<b style="color:#ffb300">Ждут тебя ${wt}</b> • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk} • Отдыхают ${rest}${play?` • Играют ${play}`:''}`;
  document.getElementById('upd').textContent='Данные: '+fmtAbs(D.generated)+' (Астана), обновляются сами'}
 setInterval(stats,1000);
 // ---------- карточки
@@ -504,9 +541,9 @@ function closeCard(){card.style.display='none';sel=null;selZone=null}
 function showCard(h){card.innerHTML=h;card.style.display='block';card.scrollTop=0;card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]))}
 function openZone(z){sel=null;selZone=z;viewIdx=zones.indexOf(z);setWhere();
  if(z.kind==='prayer'){showCard(`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.name)}</h2><div class="sub">Тихая комната для намаза</div><div class="row">Джай-намаз постелен по диагонали и смотрит в угол, где в стене ниша-михраб с надписью «Аллах» (الله).</div><button class="back">Вернуться</button>`);card.querySelector('.back').onclick=goAll;fitInto(z.x*T-8,z.y*T-8,z.w*T+16,z.h*T+16,5);return}
- const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.bots;
+ const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.kind==='games'?bots.filter(b=>b.place==='games'):z.bots;
  const n=zb.length,busy=zb.filter(b=>b.st==='busy').length,today=zb.filter(b=>b.st==='busy'||b.st==='today').length,desk=zb.filter(b=>b.place==='desk'&&b.mode==='seat').length,rest=zb.filter(b=>b.place==='lounge').length,wt=zb.filter(b=>b.place==='bench').length;
- let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='lounge'?`Здесь спят боты, неактивные больше 7 дней: ${n}`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
+ let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='games'?`Бильярд, настольный футбол и пинг-понг. Сейчас играют: ${n}. Отдыхающие боты меняются за столами.`:z.kind==='lounge'?`Здесь спят боты, неактивные больше 7 дней: ${n}`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
  if(z.id==='asset20'){const g=(D.groups||[]).find(g=>g.slug==='asset20');h+=`<div class="row">Общий чат зон. Здесь сидят Дух, Тело и Бизнес; Директор подходит к столу за сводками.</div>`;if(g)h+=`<div class="row"><span class="k">Чат активен:</span> ${fmtAgo(g.act.last)} · ${g.act.d1} сообщ. за сутки · ${g.act.d7} за 7 дней</div>`}
  h+='<div class="list">';zb.slice().sort((a,b)=>(b.act.last||0)-(a.act.last||0)).forEach(b=>{h+=`<div data-s="${b.slug}"><span><span class="dot" style="background:${ST[b.st][0]};margin-right:8px"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}</span><span class="k">${fmtAgo(b.act.last)}</span></div>`});
  h+='</div><button class="back">Вернуться</button>';showCard(h);card.querySelector('.back').onclick=goAll;fitInto(z.x*T,z.y*T-8,z.w*T,z.h*T+8,4)}
@@ -515,7 +552,7 @@ function openBot(b,keep){sel=b;selZone=zoneById[b.zone];if(!keep){viewIdx=zones.
  let h=`<h2><span class="dot" style="background:${st[0]}"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}${b.boss?' <span class="tag">главный</span>':''}</h2><div class="sub">${esc(b.role)}</div>`;
  if(waitOn(b))h+=`<div class="row" style="background:#fff3d6;border-radius:9px;padding:6px 9px"><b style="color:#a65f00">⏳ Ждёт твоего ответа с ${fmtSince(b.act.asks_since)}</b></div>`;
  else if(b.act.asks_since&&!b.boss)h+=`<div class="row" style="color:#9aa0b5">Ждал ответа с ${fmtSince(b.act.asks_since)} (больше 7 дней, не учитывается)</div>`;
- h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
+ h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${b.place==='games'?' · играет в игровой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
  h+=`<div class="row"><span class="k">Последняя активность:</span> ${fmtAgo(a.last)} (${fmtAbs(a.last)})</div>`;
  h+=`<div class="row"><span class="k">Сообщений:</span> ${a.d1} за сутки · ${a.d7} за 7 дней · всего ${a.total}</div>`;
  h+=`<div class="spark">${a.days.map(v=>`<i style="height:${v?Math.min(26,4+Math.log2(1+v)*3.5):2}px;opacity:${v?.9:.18}"></i>`).join('')}</div><div class="k" style="font-size:11px">активность за 14 дней</div>`;
@@ -563,7 +600,7 @@ function snoreTick(dt){snoreT-=dt;if(snoreT>0)return;snoreT=150;const on=SND.lev
 // ---------- фразы ботов при приближении камеры (облачко + голос, если звук включён)
 let speech=null,speaking=false,talkT=0;
 function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
- if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
+ if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
  if(!arr||!arr.length)arr=b.phrases&&b.phrases.length?b.phrases:['Работаю.'];
  let t=arr[Math.floor(Math.random()*arr.length)];if(arr.length>1)for(let i=0;i<5&&t===b.lastPhrase;i++)t=arr[Math.floor(Math.random()*arr.length)];b.lastPhrase=t;return t}
 function say(){} // голос фраз выключен: только текстовые облачка
