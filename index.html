@@ -60,7 +60,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 </div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=14"></script>
+<script src="three.min.js?v=15"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -69,6 +69,36 @@ let ctx=octx;const floorCv=document.createElement('canvas'),fctx=floorCv.getCont
 let D=null,LAY=null,L=null,W=24,H=36,zones=[],zoneById={},bots=[],bySlug={},links=[];
 let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool={},bench=[],lounge=[],sofas=[],games=[],gameSlots=[],gamers=new Map(),gameT=0;
 let view={tx:200,tz:300,az:0,tilt:.72,zoom:1},viewT=null,paused=false,sel=null,selZone=null,viewIdx=-1,animTime=0,schedT=0;
+// ---------- время намаза (Астана, метод ДУМК: Фаджр/Иша 15°, Аср по ханафи, +3 мин ихтият)
+const NAMAZ=[['fajr','Фаджр'],['dhuhr','Зухр'],['asr','Аср'],['maghrib','Магриб'],['isha','Иша']];
+const DUA=['Аллах, даруй нам всем процветание и благо, и баракат в нашей работе.','Аллах, пошли благо и достаток всем нам и баракат в наших делах.','Аллах, сделай нашу работу благословенной, а всем нам даруй процветание и добро.'];
+function prayerTimes(date){const lat=51.17,lng=71.45,tz=5,R=Math.PI/180,sn=x=>Math.sin(x*R),cs=x=>Math.cos(x*R),fx=(a,b)=>{a=a-b*Math.floor(a/b);return a<0?a+b:a};
+ const ad=new Date(date.getTime()+tz*36e5),y=ad.getUTCFullYear(),m=ad.getUTCMonth()+1,d=ad.getUTCDate();let Y=y,M=m;if(M<=2){Y--;M+=12}const A=Math.floor(Y/100),B=2-A+Math.floor(A/4);
+ const jd=Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+d+B-1524.5-lng/(15*24);
+ const sun=t=>{const D=jd+t-2451545,g=fx(357.529+.98560028*D,360),q=fx(280.459+.98564736*D,360),L=fx(q+1.915*sn(g)+.02*sn(2*g),360),e=23.439-.00000036*D;
+  const RA=fx(Math.atan2(cs(e)*sn(L),cs(L))/R/15,24);return{decl:Math.asin(sn(e)*sn(L))/R,eq:q/15-RA}};
+ const noon=t=>fx(12-sun(t).eq,24);
+ const ang=(a,t,ccw)=>{const dc=sun(t).decl,v=(-sn(a)-sn(dc)*sn(lat))/(cs(dc)*cs(lat));const tt=Math.acos(v)/R/15;return noon(t)+(ccw?-tt:tt)};
+ const asr=t=>{const dc=sun(t).decl,a=-Math.atan(1/(2+Math.tan(Math.abs(lat-dc)*R)))/R;return ang(a,t)};
+ let f=ang(15,5/24,true),sr=ang(.833,6/24,true),dh=noon(12/24),as=asr(13/24),ss=ang(.833,18/24),is=ang(15,18/24);
+ const night=24-(ss-sr),por=15/60*night;if(isNaN(f)||sr-f>por)f=sr-por;if(isNaN(is)||is-ss>por)is=ss+por;
+ const adj=h=>h+tz-lng/15,mins=[adj(f),adj(dh)+5/60,adj(as)+5/60,adj(ss)+5/60,adj(is)];
+ return NAMAZ.map((n,i)=>({id:n[0],name:n[1],t:new Date(Date.UTC(y,m-1,d)+(Math.round(mins[i]*60)-tz*60)*6e4)}))}
+let namazT=0;const NAMAZ_SIM=new URLSearchParams(location.search).get('namaz'),NAMAZ_LEN=14*6e4;
+function namazNow(){if(NAMAZ_SIM){const n=NAMAZ.find(x=>x[0]===NAMAZ_SIM)||NAMAZ[1];return{id:n[0],name:n[1]}}
+ const now=new Date(),ts=prayerTimes(now);return ts.find(p=>now>=p.t&&now-p.t<NAMAZ_LEN)||null}
+const astD=d=>new Date(d.getTime()+5*36e5),fmtHM=d=>{const a=astD(d);return String(a.getUTCHours()).padStart(2,'0')+':'+String(a.getUTCMinutes()).padStart(2,'0')},fmtDM=d=>{const a=astD(d);return String(a.getUTCDate()).padStart(2,'0')+'.'+String(a.getUTCMonth()+1).padStart(2,'0')+'.'+a.getUTCFullYear()};
+function namazState(){const now=new Date(),ts=prayerTimes(now);const cur=namaz?ts.find(p=>p.id===namaz.id):null;const nx=ts.find(p=>p.t>now&&(!cur||p.id!==cur.id))||null;return{now,ts,cur,nx}}
+let boardTex=null,boardKey='';const boardCv=document.createElement('canvas');boardCv.width=512;boardCv.height=320;
+function paintBoard(){const st=namazState(),k=fmtDM(st.now)+(st.cur?st.cur.id:'')+(st.nx?st.nx.id:'');if(k===boardKey&&boardTex)return;boardKey=k;const c=boardCv.getContext('2d');
+ c.fillStyle='#3b2a1a';c.fillRect(0,0,512,320);c.fillStyle='#14382f';c.fillRect(10,10,492,300);c.fillStyle='#f3e6c4';c.font='700 34px -apple-system,Roboto,sans-serif';c.textBaseline='middle';c.textAlign='left';c.fillText('Намаз · Астана',28,42);c.textAlign='right';c.font='600 28px -apple-system,Roboto,sans-serif';c.fillText(fmtDM(st.now),488,42);
+ st.ts.forEach((p,i)=>{const y=92+i*46,hi=(st.cur&&st.cur.id===p.id)||(!st.cur&&st.nx&&st.nx.id===p.id);if(hi){c.fillStyle='#e2bb5c';c.fillRect(18,y-21,476,42)}c.fillStyle=hi?'#14382f':'#f3e6c4';c.font='700 32px -apple-system,Roboto,sans-serif';c.textAlign='left';c.fillText(p.name,32,y);c.textAlign='right';c.fillText(fmtHM(p.t),480,y)});
+ if(boardTex)boardTex.needsUpdate=true}
+function drawBoardOverlay(){const z=zoneById.prayer;if(!z)return;const st=namazState();const sd=z.sides||{};const s=Math.max(.75,Math.min(1.15,view.zoom*.85)),w=118*s,lh=14*s,h=lh*6+10*s;let x,y;
+ if(!sd.s){const[ax,ay]=w2s((z.x+z.w/2)*T,(z.y+z.h+1)*T,0);x=ax-w/2;y=ay+2*s}else if(!sd.e){const[ax,ay]=w2s((z.x+z.w+1)*T,(z.y+z.h/2)*T,0);x=ax+2*s;y=ay-h/2}else{const[ax,ay]=w2s((z.x+z.w/2)*T,z.y*T,view.tilt<.1?0:WH+2);x=ax-w/2;y=ay-h-4*s}if(x+w<0||y>vh()||x>vw()||y+h<0)return;octx.save();octx.fillStyle='rgba(20,56,47,.94)';rrp(x,y,w,h,6*s);octx.fill();octx.strokeStyle='#e2bb5c';octx.lineWidth=1.2;octx.stroke();
+ octx.textBaseline='middle';octx.fillStyle='#f3e6c4';octx.font='700 '+(10.5*s)+'px -apple-system,Roboto,sans-serif';octx.textAlign='left';octx.fillText('Намаз',x+7*s,y+5*s+lh/2);octx.textAlign='right';octx.font='600 '+(9.5*s)+'px -apple-system,Roboto,sans-serif';octx.fillText(fmtDM(st.now),x+w-7*s,y+5*s+lh/2);
+ st.ts.forEach((p,i)=>{const yy=y+5*s+lh*(i+1)+lh/2,hi=(st.cur&&st.cur.id===p.id)||(!st.cur&&st.nx&&st.nx.id===p.id);if(hi){octx.fillStyle='#e2bb5c';rrp(x+3*s,yy-lh/2+1,w-6*s,lh-2,3);octx.fill()}octx.fillStyle=hi?'#14382f':'#f3e6c4';octx.font=(hi?'800 ':'600 ')+(10.5*s)+'px -apple-system,Roboto,sans-serif';octx.textAlign='left';octx.fillText(p.name,x+8*s,yy);octx.textAlign='right';octx.fillText(fmtHM(p.t),x+w-8*s,yy)});
+ octx.restore();octx.textAlign='left'}
 // ---------- время/формат
 const pad=n=>String(n).padStart(2,'0');
 const ast=ms=>new Date(ms+5*3600e3);
@@ -104,7 +134,10 @@ function build(){
    const bx=z.x+Math.floor(z.w/2)-1,by=z.y+3;for(let i=0;i<3;i++){block(bx+i,by);block(bx+i,by+1)}
    z.big={x:bx,y:by};for(let i=1;i<=3;i++)block(z.x+i,z.y);decor.push({t:'shelf',x:z.x+1,y:z.y});
    block(z.x+z.w-1,z.y);decor.push({t:'plant',x:z.x+z.w-1,y:z.y});block(z.x,z.y+z.h-1);decor.push({t:'plant',x:z.x,y:z.y+z.h-1});
-   z.bots.forEach(b=>{b.kind='boss';b.seat={x:bx+1,y:by-1};b.sit={x:(bx+1.5)*T,y:(by-1+.85)*T};b.stand=[[bx+1,by+2],[bx,by+2],[bx+2,by+2],[bx-1,by+1],[bx+3,by+1]]});
+   z.bots.filter(b=>b.reception).forEach((b,i)=>{const rc=L.reception||[z.x+z.w+1,z.y+z.h+1];const dx=rc[0]+i*3,sy=rc[1]; // приёмная у входа в кабинет
+    block(dx,sy+1);block(dx+1,sy+1);b.kind='desk';b.desk={x:dx,y:sy+1};b.seat={x:dx,y:sy};b.sit={x:(dx+1)*T,y:(sy+.85)*T};
+    b.stand=[[dx-1,sy],[dx+2,sy],[dx-1,sy+1],[dx+2,sy+1],[dx,sy+2],[dx+1,sy+2]];z.reception={x:dx,y:sy}});
+   z.bots.filter(b=>!b.reception).forEach(b=>{b.kind='boss';b.seat={x:bx+1,y:by-1};b.sit={x:(bx+1.5)*T,y:(by-1+.85)*T};b.stand=[[bx+1,by+2],[bx,by+2],[bx+2,by+2],[bx-1,by+1],[bx+3,by+1]]});
   }else if(z.kind==='table'){
    const tx=Math.floor(z.x+z.w/2),ty=Math.floor(z.y+z.h/2)+1;for(let x=tx-1;x<=tx+1;x++)for(let y=ty-1;y<=ty;y++)block(x,y);
    z.table={x:tx,y:ty};const seats=[[tx,ty-2],[tx-2,ty-1],[tx+2,ty-1],[tx,ty+1]];z.seats=seats;
@@ -162,20 +195,25 @@ function computeCand(){
  const g=(D.groups||[]).find(g=>g.slug==='asset20');
  if(g&&g.act&&g.act.last&&bySlug.director){const age=(Date.now()-g.act.last)/36e5;if(age<24*7)cand.push({v:'director',t:'asset20',w:age<24?6:2,n:g.act.d7,last:g.act.last})}
 }
-const canPlay=b=>!b.boss&&!waitOn(b)&&(b.st==='sleep'||b.st==='week');
+const canPlay=b=>!b.boss&&b.slug!==imamSlug&&!waitOn(b)&&(b.st==='sleep'||b.st==='week');
 function pickGamers(){gamers=new Map();if(!games.length)return;
  const c=bots.filter(b=>canPlay(b)&&(b.mode==='seat'||b.place==='games'));for(let i=c.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[c[i],c[j]]=[c[j],c[i]]}
  const n=Math.min(games.length,Math.max(c.length>=2?1:0,Math.floor(c.length/4)));const tb=games.slice().sort(()=>Math.random()-.5);
  for(let i=0;i<n;i++){gamers.set(c[2*i].slug,tb[i].si);gamers.set(c[2*i+1].slug,tb[i].si+1)}}
-function desired(b){if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='sleep')return 'lounge';return 'desk'}
-function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set()};
+let namaz=null,imamSlug=null,duaT=0;
+function pickImam(){const ok=b=>b&&!b.boss&&!waitOn(b)&&b.mode==='seat'&&b.place!=='bench';if(bySlug[imamSlug]&&(bySlug[imamSlug].place==='prayer'||ok(bySlug[imamSlug])))return imamSlug;
+ const pref=['spirit','body','network'].map(x=>bySlug[x]).find(ok)||bots.find(ok);return pref?pref.slug:null}
+function namazTick(){paintBoard();const n=namazNow();const was=namaz;namaz=n;if(n&&!was)imamSlug=pickImam();if(!n)imamSlug=null;if(!!n!==!!was)assignPlaces(false)}
+function desired(b){if(b.boss)return 'desk';if(namaz&&b.slug===imamSlug&&zoneById.prayer)return 'prayer';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='sleep')return 'lounge';return 'desk'}
+function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set(),prayer:new Set()};
  bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
  bots.forEach(b=>{const d=desired(b);if(d===b.place&&(d!=='games'||b.slot===gamers.get(b.slug)))return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
   if(d==='games'){const i=gamers.get(b.slug),q=gameSlots[i];place='games';slot=i;seat={x:q.x,y:q.y};sit=anchor(q.x,q.y)}
+  else if(d==='prayer'){const z=zoneById.prayer;place='prayer';slot=0;seat={x:z.door.x,y:z.door.y};sit={x:z.x*T+31,y:z.y*T+33}}
   else if(d!=='desk'){const arr=d==='bench'?bench:lounge;const i=arr.findIndex((t,k)=>!used[d].has(k));if(i>=0){used[d].add(i);place=d;slot=i;seat={x:arr[i].x,y:arr[i].y};sit=anchor(arr[i].x,arr[i].y)}}
-  if(place===b.place&&slot===b.slot)return;const from=b.seat;b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
+  if(place===b.place&&slot===b.slot)return;const from=b.seat;b.wasPrayer=b.place==='prayer';b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
   if(instant){b.x=sit.x;b.y=sit.y;b.mode='seat';return}
-  if(b.mode!=='seat')return;const path=bfs(from.x,from.y,[[seat.x,seat.y]]);b.pts=path?path.map(p=>anchor(p[0],p[1])):[];b.pts.push({x:sit.x,y:sit.y});b.mode='back'})}
+  if(b.mode!=='seat')return;const path=bfs(from.x,from.y,[[seat.x,seat.y]]);b.pts=path?path.map(p=>anchor(p[0],p[1])):[];if(b.wasPrayer)b.pts.unshift(anchor(from.x,from.y));b.pts.push({x:sit.x,y:sit.y});b.mode='back'})}
 const standOf=t=>t.place==='desk'?t.stand:nbrs(t.seat.x,t.seat.y);
 function nbrs(x,y){return[[x-1,y],[x+1,y],[x,y-1],[x,y+1],[x-1,y+1],[x+1,y+1],[x-1,y-1],[x+1,y-1]]}
 function bfs(sx,sy,goals){const gs=new Set(goals.map(g=>key(g[0],g[1])));const prev=new Int32Array(W*H).fill(-1);const q=[key(sx,sy)];prev[q[0]]=q[0];
@@ -186,8 +224,8 @@ const anchor=(tx,ty)=>({x:(tx+.5)*T,y:(ty+.85)*T});
 // ---------- визиты
 function schedule(){
  if(!cand.length)return;const walking=bots.filter(b=>b.mode!=='seat').length,maxW=LAY==='wide'?5:4;if(walking>=maxW)return;
- const ok=cand.filter(c=>{const v=bySlug[c.v];if(!v||v.mode!=='seat'||v.lock||v.st==='sleep')return false;if(sel&&sel.slug===c.v)return false;
-  if((pairCool[c.v+'>'+c.t]||0)>animTime)return false;if(c.t==='asset20')return true;const t=bySlug[c.t];return t&&t.mode==='seat'});
+ const ok=cand.filter(c=>{const v=bySlug[c.v];if(!v||v.mode!=='seat'||v.lock||v.st==='sleep'||v.place==='prayer')return false;if(sel&&sel.slug===c.v)return false;
+  if((pairCool[c.v+'>'+c.t]||0)>animTime)return false;if(c.t==='asset20')return true;const t=bySlug[c.t];return t&&t.mode==='seat'&&t.place!=='prayer'});
  if(!ok.length)return;let r=Math.random()*ok.reduce((s,c)=>s+c.w,0),pick=ok[0];for(const c of ok){r-=c.w;if(r<=0){pick=c;break}}
  startVisit(pick)}
 function startVisit(c){const v=bySlug[c.v];let goals,sitAt=null,t=null;
@@ -384,7 +422,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=14';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -441,8 +479,10 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=14');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
-  const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl)}
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
+  boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
+  const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd)}
  const a=zoneById.asset20;if(a){const tx=(a.table.x+.5)*T,tz=a.table.y*T+2;
   const m1=new THREE.Mesh(new THREE.CylinderGeometry(1,1,11,22),new THREE.MeshBasicMaterial({color:'#6d4c41'}));m1.scale.set(26,1,15);m1.position.set(tx,5.5,tz);scene.add(m1);meshes.push(m1);
   const m2=new THREE.Mesh(new THREE.CylinderGeometry(1,1,.4,22),new THREE.MeshBasicMaterial({color:'#a1887f'}));m2.scale.set(23,1,12.5);m2.position.set(tx,11.2,tz);scene.add(m2);meshes.push(m2)}
@@ -465,8 +505,12 @@ function isBust(b){return b.mode==='seat'&&b.place==='desk'&&Math.abs(b.x-b.sit.
 function botH(b){return isBust(b)?4:(b.mode==='seat'?3:.5)}
 function headH(b){return botH(b)+(isBust(b)?21:26)}
 function updateSprites(){bots.forEach(b=>{const s=spr.get(b.slug);if(!s)return;const bust=isBust(b);const moving=(b.mode==='go'||b.mode==='back')&&b.pts&&b.pts.length;
- const play=b.place==='games'&&b.mode==='seat';const i=bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
- s.obj.scale.set(16,bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),botH(b),b.y)})}
+ const play=b.place==='games'&&b.mode==='seat';const pray=praying(b),ph=pray?(animTime%12000)/12000:0,low=pray&&ph>=.55;const i=pray?(low?3:0):bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
+ s.obj.scale.set(16,pray?(ph>=.4&&ph<.55?21:low?(ph<.8?15:21):27):bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),pray?1:botH(b),b.y)})}
+function praying(b){return b.place==='prayer'&&b.mode==='seat'&&Math.hypot(b.x-b.sit.x,b.y-b.sit.y)<2}
+function duaTick(dt){duaT-=dt;if(duaT>0)return;duaT=1000;const b=bots.find(praying);if(!b)return;if(!b.prayStart)b.prayStart=animTime;if(animTime-b.prayStart<6000)return;
+ const now=performance.now();if(speech&&speech.b===b&&now<speech.until)return;if(speech&&now<speech.until-800)return;if(b.duaNext&&now<b.duaNext)return;
+ const t=DUA[(b.duaI=(b.duaI||0)+1)%DUA.length];speech={b,t,until:now+7000};b.duaNext=now+16000}
 // ---------- камера (орбита)
 const TILT3D=.72;
 const _v=new THREE.Vector3(),_o=new THREE.Vector3(),_d=new THREE.Vector3();
@@ -495,13 +539,17 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
  bots.forEach(b=>{const[hx,hy]=w2s(b.x,b.y,headH(b));octx.save();octx.translate(hx,hy);octx.scale(k,k);const X=0,Y=-2;
   if(waitOn(b)&&b.mode==='seat'){const p=.5+.5*Math.sin(animTime/300);octx.save();octx.shadowColor='#ffab00';octx.shadowBlur=6+6*p;octx.fillStyle='#ffab00';octx.beginPath();octx.arc(X,Y-4,6+p,0,7);octx.fill();octx.restore();octx.fillStyle='#3e2723';octx.font='bold 9px sans-serif';octx.textAlign='center';octx.fillText('?',X,Y-1);octx.textAlign='left'}
   else if(b.st==='busy')bulb(X,Y-4);
-  else if(b.st==='sleep'&&b.mode==='seat'&&b.place!=='games'){octx.fillStyle='#c5d0ff';octx.font='bold 9px monospace';const o=(animTime/600)%3;octx.fillText('z',X+8,Y+6-o);octx.fillText('Z',X+12,Y-2-o)}
+  else if(b.st==='sleep'&&b.mode==='seat'&&b.place!=='games'&&b.place!=='prayer'){octx.fillStyle='#c5d0ff';octx.font='bold 9px monospace';const o=(animTime/600)%3;octx.fillText('z',X+8,Y+6-o);octx.fillText('Z',X+12,Y-2-o)}
   if(b.mode==='talk')bubble(X,Y-2);
   if(waiting(b)&&b.mode==='seat'&&b.st!=='busy'&&b.place!=='bench'){R(X+8,Y+2,10,7,'#fff');octx.strokeStyle='#c62828';octx.lineWidth=1;octx.beginPath();octx.moveTo(X+8,Y+2);octx.lineTo(X+13,Y+6);octx.lineTo(X+18,Y+2);octx.stroke()}
   if((b.act.routines||[]).some(r=>r.state==='работает')&&b.mode==='seat'){octx.fillStyle='#fff';octx.beginPath();octx.arc(X-11,Y+9,4,0,7);octx.fill();octx.strokeStyle='#3047b8';octx.lineWidth=1.2;octx.beginPath();octx.moveTo(X-11,Y+9);octx.lineTo(X-11,Y+6.5);octx.moveTo(X-11,Y+9);octx.lineTo(X-9,Y+9);octx.stroke()}
   octx.restore();
   if(b.mode==='talk'&&b.target){const[tx,ty]=w2s(b.target.x,b.target.y,headH(b.target));octx.save();octx.translate(tx+10*k,ty);octx.scale(k,k);bubble(0,-2);octx.restore()}});
- drawLabels();drawSpeech()}
+  const im=bots.find(b=>b.place==='prayer');if(namaz&&im){const[px,py0]=w2s(im.x,im.y,0),py=py0+30;const t='Намаз: '+namaz.name;octx.font='700 12px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+18;
+  octx.fillStyle='rgba(30,90,70,.92)';rrp(px-tw/2,py-11,tw,20,10);octx.fill();octx.fillStyle='#fff';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,px-tw/2+9,py)}
+ const cz=zoneById.cabinet;if(cz&&cz.reception){const rc=cz.reception;const[rx,ry]=w2s((rc.x+1)*T,(rc.y+2)*T+2,0);const t='Приёмная';octx.font='700 11px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+14;
+  octx.fillStyle='rgba(255,213,79,.95)';rrp(rx-tw/2,ry-9,tw,17,8);octx.fill();octx.fillStyle='#3e2723';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,rx-tw/2+7,ry)}
+ drawBoardOverlay();drawLabels();drawSpeech()}
 function labelPos(b,fz){const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y,0);return[sx,sy0+3+lv*(fz+6)]}
 function drawLabels(){
  const fz=Math.max(9.5,Math.min(13,8+view.zoom*1.6));
@@ -521,11 +569,11 @@ let lastT=performance.now();
 function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
  if(viewT){const k=Math.min(1,(now-viewT.t)/viewT.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2,f=viewT.from,t=viewT.to;const da=((t.az-f.az+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
   view={tx:f.tx+(t.tx-f.tx)*e,tz:f.tz+(t.tz-f.tz)*e,az:f.az+da*e,tilt:f.tilt+(t.tilt-f.tilt)*e,zoom:f.zoom+(t.zoom-f.zoom)*e};if(k>=1){view={...t};viewT=null}}
- if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));gameT-=dt;if(gameT<=0){gameT=45000+Math.random()*25000;pickGamers();assignPlaces(false)}}snoreTick(dt);
+ if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));namazT-=dt;if(namazT<=0){namazT=5000;namazTick()}duaTick(dt);gameT-=dt;if(gameT<=0){gameT=45000+Math.random()*25000;pickGamers();assignPlaces(false)}}snoreTick(dt);
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='14';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
@@ -539,8 +587,11 @@ setInterval(stats,1000);
 // ---------- карточки
 function closeCard(){card.style.display='none';sel=null;selZone=null}
 function showCard(h){card.innerHTML=h;card.style.display='block';card.scrollTop=0;card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]))}
+function namazCard(){const{now,ts,nx}=namazState();const im=bots.find(b=>b.place==='prayer');
+ let h=`<div class="row"><span class="k">Время намаза сегодня, ${fmtDM(now)} (Астана, ДУМК):</span></div><div class="list">`+ts.map(p=>{const cur=namaz&&namaz.id===p.id,nxt=!cur&&nx&&nx.id===p.id;return`<div><span>${cur?'🕌 ':''}${p.name}${cur?' · идёт сейчас':nxt?' · следующий':''}</span><span class="k">${fmtHM(p.t)}</span></div>`}).join('')+'</div>';
+ h+=`<div class="row">${namaz&&im?`Сейчас ${esc(im.name)} совершает намаз «${namaz.name}».`:'В начале каждого намаза один из ботов приходит сюда и молится на коврике лицом к михрабу (~15 минут).'} После намаза бот делает дуа: «${DUA[0]}»</div>`;return h}
 function openZone(z){sel=null;selZone=z;viewIdx=zones.indexOf(z);setWhere();
- if(z.kind==='prayer'){showCard(`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.name)}</h2><div class="sub">Тихая комната для намаза</div><div class="row">Джай-намаз постелен по диагонали и смотрит в угол, где в стене ниша-михраб с надписью «Аллах» (الله).</div><button class="back">Вернуться</button>`);card.querySelector('.back').onclick=goAll;fitInto(z.x*T-8,z.y*T-8,z.w*T+16,z.h*T+16,5);return}
+ if(z.kind==='prayer'){showCard(`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.name)}</h2><div class="sub">Тихая комната для намаза</div><div class="row">Джай-намаз постелен по диагонали и смотрит в угол, где в стене ниша-михраб с надписью «Аллах» (الله).</div>${namazCard()}<button class="back">Вернуться</button>`);card.querySelector('.back').onclick=goAll;fitInto(z.x*T-8,z.y*T-8,z.w*T+16,z.h*T+16,5);return}
  const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.kind==='games'?bots.filter(b=>b.place==='games'):z.bots;
  const n=zb.length,busy=zb.filter(b=>b.st==='busy').length,today=zb.filter(b=>b.st==='busy'||b.st==='today').length,desk=zb.filter(b=>b.place==='desk'&&b.mode==='seat').length,rest=zb.filter(b=>b.place==='lounge').length,wt=zb.filter(b=>b.place==='bench').length;
  let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='games'?`Бильярд, настольный футбол и пинг-понг. Сейчас играют: ${n}. Отдыхающие боты меняются за столами.`:z.kind==='lounge'?`Здесь спят боты, неактивные больше 7 дней: ${n}`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
@@ -600,7 +651,7 @@ function snoreTick(dt){snoreT-=dt;if(snoreT>0)return;snoreT=150;const on=SND.lev
 // ---------- фразы ботов при приближении камеры (облачко + голос, если звук включён)
 let speech=null,speaking=false,talkT=0;
 function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
- if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
+ if(b.place==='prayer')arr=DUA;else if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
  if(!arr||!arr.length)arr=b.phrases&&b.phrases.length?b.phrases:['Работаю.'];
  let t=arr[Math.floor(Math.random()*arr.length)];if(arr.length>1)for(let i=0;i<5&&t===b.lastPhrase;i++)t=arr[Math.floor(Math.random()*arr.length)];b.lastPhrase=t;return t}
 function say(){} // голос фраз выключен: только текстовые облачка
