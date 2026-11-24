@@ -66,7 +66,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=15.5"></script>
+<script src="three.min.js?v=15.6"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -290,13 +290,25 @@ function namazTick(){const n=namazNow(),k=n?n.id+n.g:'',was=namaz?namaz.id+namaz
  prayMembers=new Map();imamSlug=null;if(n&&D){(n.plan.groups[n.g]||[]).forEach((sl,i)=>{if(bySlug[sl])prayMembers.set(sl,i)});imamSlug=(n.plan.groups[n.g]||[])[0]||null}
  bots.forEach(b=>{if(b.place==='prayer')b.prayStart=0});assignPlaces(false)}
 // места на полу намазханы: имам на коврике, остальные за ним (джамаат)
-const PRAY_POS=[[31,33],[54,24],[72,24],[88,28],[50,42],[68,42],[86,44],[48,58],[66,58]];
+// v15.6: кибла = михраб в углу с надписью «Аллах»; ряды строятся перпендикулярно направлению на киблу, имам впереди
+function qiblaPt(z){return{x:z.x*T+14,y:z.y*T+14}} // центр ниши-михраба (та же точка, где стоит 3D-михраб)
+function rugPt(z){return{x:z.x*T+27,y:z.y*T+27}}
+const PPOS={};
+function prayPos(z){const key=[z.x,z.y,z.w,z.h].join();if(PPOS[key])return PPOS[key];
+ const Q=qiblaPt(z),R0=rugPt(z),L=Math.hypot(R0.x-Q.x,R0.y-Q.y),u={x:(R0.x-Q.x)/L,y:(R0.y-Q.y)/L},r={x:-u.y,y:u.x};
+ const x0=z.x*T+7,x1=(z.x+z.w)*T-7,y0=z.y*T+12,y1=(z.y+z.h)*T-2,inb=p=>p.x>=x0&&p.x<=x1&&p.y>=y0&&p.y<=y1;
+ let out=null;for(let sc=1;sc>.5&&!out;sc-=.06){const pts=[{x:Q.x+u.x*22,y:Q.y+u.y*22,row:0}];
+  for(let k=1;k<8&&pts.length<GROUP_N;k++){const d=22+k*20*sc,c={x:Q.x+u.x*d,y:Q.y+u.y*d};const row=[];
+   for(let l=0;l<=7;l++)for(const sg of l?[1,-1]:[1]){const p={x:c.x+r.x*l*15*sc*sg,y:c.y+r.y*l*15*sc*sg,row:k};if(inb(p))row.push(p)}
+   row.forEach(p=>{if(pts.length<GROUP_N)pts.push(p)})}
+  if(pts.length>=GROUP_N)out=pts}
+ return PPOS[key]=out||[{x:Q.x+u.x*22,y:Q.y+u.y*22,row:0}]}
 function desired(b){if(prayMembers.has(b.slug)&&zoneById.prayer)return 'prayer';if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='idle')return 'lounge';return 'desk'}
 function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set(),prayer:new Set()};
  bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
  bots.forEach(b=>{const d=desired(b);if(d===b.place&&(d==='games'?b.slot===gamers.get(b.slug):d==='prayer'?b.slot===prayMembers.get(b.slug):true))return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
   if(d==='games'){const i=gamers.get(b.slug),q=gameSlots[i];place='games';slot=i;seat={x:q.x,y:q.y};sit=anchor(q.x,q.y)}
-  else if(d==='prayer'){const z=zoneById.prayer,i=prayMembers.get(b.slug),q=PRAY_POS[i%PRAY_POS.length];place='prayer';slot=i;seat={x:z.door.x,y:z.door.y};sit={x:z.x*T+q[0],y:z.y*T+q[1]}}
+  else if(d==='prayer'){const z=zoneById.prayer,i=prayMembers.get(b.slug),pp=prayPos(z),q=pp[i%pp.length];place='prayer';slot=i;seat={x:z.door.x,y:z.door.y};sit={x:q.x,y:q.y}}
   else if(d!=='desk'){const arr=d==='bench'?bench:lounge;const i=arr.findIndex((t,k)=>!used[d].has(k));if(i>=0){used[d].add(i);place=d;slot=i;seat={x:arr[i].x,y:arr[i].y};sit=anchor(arr[i].x,arr[i].y)}}
   if(place===b.place&&slot===b.slot)return;const from=b.seat;b.wasPrayer=b.place==='prayer';b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
   if(instant){b.x=sit.x;b.y=sit.y;b.mode='seat';return}
@@ -357,8 +369,24 @@ const POSES={
  salamL:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".sssssssh.",".esseesss.",".ssssssss.","..mmsss...",".cccccccc.",".cccccccc.","ppsppppspp","pppppppppp"]},
  dua:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.",".sesssses.",".ssssssss.","s.ssmmss.s","sscccccss.".replace(/\.$/,'s'),".cccccccc.","pppppppppp","pppppppppp"]},
  wipe:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.","cssssssssc","cssssssssc","c.ssssss.c",".cccccccc.",".cccccccc.","pppppppppp","pppppppppp"]}};
+// v15.6: виды сбоку (S, лицом влево), со спины (B) и спереди (F) — чтобы каждый бот смотрел строго на киблу
+Object.assign(POSES,{
+ qiyamS:{dy:0,side:1,g:["...hhhh...","..hhhhhh..",".hhhhhhhh.",".sshhhhhh.",".esshhhhh.","ssssshhh..",".mssss....","..ccccc...","..cccccc..","..cccccc..",".sscccc...","..ppppp...","..pp.pp...",".bbb.bb..."]},
+ takbirS:{dy:0,side:1,g:["...hhhh...","..hhhhhh..",".hhhhhhhh.",".sshhhsshh",".esshhhss.","ssssshhcc.",".mssssccc.","..ccccc...","..cccccc..","..cccccc..","..cccccc..","..ppppp...","..pp.pp...",".bbb.bb..."]},
+ sitS:{dy:3,side:1,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".sshhhhhh.",".esshhhhh.","ssssshhh..",".mssss....","..ccccc...","..cccccc..",".sspppppp.","..pppppbbb"]},
+ duaS:{dy:3,side:1,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".sshhhhhh.",".esshhhhh.","ssssshhh..","ss.sss....","sscccc....","..cccccc..","..pppppppp","..pppppbbb"]},
+ wipeS:{dy:3,side:1,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.","csshhhhhh.","cesshhhhh.","csssshhh..","ccssss....","..ccccc...","..cccccc..","..pppppppp","..pppppbbb"]},
+ rukuF:{dy:null,g:["..........","..........","..........","..........","..........","..cccccc..",".cccccccc.",".chhhhhhc.",".shhhhhhs.",".shsssshs.",".s.pppp.s.","..pppppp..","..pp..pp..","..bb..bb.."]},
+ rukuB:{dy:null,g:["..........","..........","..........","..........","..........","..........","..cccccc..",".cccccccc.",".cppppppc.","..pppppp..","..pppppp..","..pp..pp..","..pp..pp..","..bb..bb.."]},
+ sujudF:{dy:null,g:["..........","..........","..........","..........","..........","..........","..........","..........","..........","...cccc...","..cccccc..",".cccccccc.","shhhhhhhhs","ss.hhhh.ss"]},
+ sujudB:{dy:null,g:["..........","..........","..........","..........","..........","..........","..........","..........","..........","..pppppp..",".pppppppp.",".pccccccp.","bbccccccbb","bb......bb"]}});
+['qiyam','takbir','sit','dua','wipe'].forEach(n=>{const g=POSES[n].g;let body=g.findIndex(r=>(r.match(/c/g)||[]).length>=5);
+ POSES[n+'B']={dy:POSES[n].dy,back:1,g:g.map((r,i)=>[...r].map((ch,c)=>{if(i<body)return c>=1&&c<=8&&'sem'.includes(ch)?'h':ch;if(ch==='s'&&c>=2&&c<=7){const cc=(r.match(/c/g)||[]).length,pc=(r.match(/p/g)||[]).length;return pc>cc?'p':'c'}return ch}).join(''))};
+ POSES[n+'F']=POSES[n]});
+POSES.rukuS=POSES.ruku;POSES.sujudS=POSES.sujud;
+const POSE_FAM={niyyah:'qiyam',qiyam:'qiyam',rise:'qiyam',qawma:'qiyam',takbir:'takbir',ruku:'ruku',sujud:'sujud',jalsa:'sit',qada:'sit',tasbih:'sit',salamR:'sit',salamL:'sit',dua:'dua',wipe:'wipe'};
 const POSE_TEX={niyyah:'qiyam',qiyam:'qiyam',rise:'qiyam',qawma:null,takbir:'takbir',ruku:'ruku',sujud:'sujud',jalsa:'sit',qada:'sit',tasbih:'sit',salamR:'salamR',salamL:'salamL',dua:'dua',wipe:'wipe'};
-function poseTex(b,pose){const c=document.createElement('canvas');c.width=32;c.height=54;const k=c.getContext('2d');k.imageSmoothingEnabled=false;k.setTransform(2,0,0,2,0,0);const keep=ctx;ctx=k;drawSprite(b,8,25.6,0,pose);ctx=keep;const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
+function poseTex(b,pose,mir){const c=document.createElement('canvas');c.width=32;c.height=54;const k=c.getContext('2d');k.imageSmoothingEnabled=false;k.setTransform(mir?-2:2,0,0,2,mir?32:0,0);const keep=ctx;ctx=k;drawSprite(b,8,25.6,0,pose);ctx=keep;const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function drawSprite(b,x,y,frame,pose){const PG=pose&&POSES[pose],G=PG?PG.g:BASE,dy=PG?PG.dy:0;
  const P=1.6,lk=b.look||{},h=hsh(b.slug);const col={h:lk.hair||'#3a2a1a',s:SK[h%4],e:'#1b1b2a',m:'#b0605a',c:lk.shirt||'#888',p:'#2c3350',b:'#15182a'};
  const px=(c,r,color)=>{ctx.fillStyle=color;ctx.fillRect(x+(c-5)*P,y+(r-14)*P,P+.04,P+.04)};
@@ -373,7 +401,7 @@ function drawSprite(b,x,y,frame,pose){const PG=pose&&POSES[pose],G=PG?PG.g:BASE,
  if(st==='tubeteika'){for(let c=2;c<8;c++){px(c,0,'#1b5e20');px(c,1,'#1b5e20')}px(3,1,'#fff');px(6,1,'#fff')}
  if(st==='band'){for(let c=1;c<9;c++)px(c,2,'#fff');px(1,2,'#e53935');px(8,2,'#e53935')}
  if(st==='beret'){for(let c=1;c<9;c++){px(c,0,'#c62828');px(c,1,'#c62828')}px(9,1,'#c62828');px(5,-1,'#c62828')}
- const a=lk.acc;
+ const a=(PG&&(PG.side||PG.back))?null:lk.acc;
  if(a==='glasses'){for(let c=1;c<9;c++)px(c,4,'#222');px(2,4,'#9fd3ff');px(7,4,'#9fd3ff')}
  if(a==='tie'){px(4,7,'#c62828');px(5,7,'#c62828');px(4,8,'#c62828');px(5,8,'#c62828');px(5,9,'#c62828');px(4,10,'#c62828');px(2,7,'#fff');px(7,7,'#fff')}
  if(a==='headset'){px(0,3,'#444');px(0,4,'#444');px(9,3,'#444');px(9,4,'#444');for(let c=1;c<9;c++)px(c,0,'#444');px(1,5,'#444');px(2,6,'#444')}
@@ -522,7 +550,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.5';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.6';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -577,9 +605,9 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   if(sd.w){seg([-1,0],true,col(z.x-1,false));seg([-1,0],true,col(z.x-1,true),true)}
   if(sd.e){seg([1,0],true,col(z.x+z.w,false));seg([1,0],true,col(z.x+z.w,true),true)}
   // михраб: ниша по диагонали в углу, лицом к коврику
-  const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
+  const S=28,QP=qiblaPt(z),cxn=QP.x,czn=QP.y,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.5');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.6');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -608,9 +636,20 @@ function botH(b){return isBust(b)?4:(b.mode==='seat'?3:.5)}
 function headH(b){return botH(b)+(isBust(b)?21:26)}
 function updateSprites(){bots.forEach(b=>{const s=spr.get(b.slug);if(!s)return;const bust=isBust(b);const moving=(b.mode==='go'||b.mode==='back')&&b.pts&&b.pts.length;
  const play=b.place==='games'&&b.mode==='seat';const sp=praying(b)?curStep():null,pk=sp?POSE_TEX[sp.pose]:null;
- if(pk){s.ptex=s.ptex||{};const tx=s.ptex[pk]||(s.ptex[pk]=poseTex(b,pk));if(s.cur!=='p'+pk){s.obj.material.map=tx;s.obj.material.needsUpdate=true;s.cur='p'+pk}s.obj.scale.set(16,27,1);s.obj.position.set(b.x,1,b.y);return}
+ if(sp){const f=facePose(b,sp.pose),key=f.g+(f.mir?'m':'');s.ptex=s.ptex||{};const tx=s.ptex[key]||(s.ptex[key]=poseTex(b,f.g,f.mir));if(s.cur!=='p'+key){s.obj.material.map=tx;s.obj.material.needsUpdate=true;s.cur='p'+key}
+  s.obj.material.rotation=f.rot;s.obj.center.set(.5,f.cy);s.obj.scale.set(16,27,1);s.obj.position.set(b.x,1,b.y);b.face=f;return}
+ if(s.obj.material.rotation){s.obj.material.rotation=0}if(s.obj.center.y)s.obj.center.set(.5,0);
  const pray=false;const i=bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
  s.obj.scale.set(16,bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),pray?1:botH(b),b.y)})}
+// направление взгляда: строго на точку киблы (михраб), считается из координат; салям — поворот головы вправо/влево от этого направления
+function qiblaDir(b){const z=zoneById.prayer,Q=qiblaPt(z),dx=Q.x-b.x,dy=Q.y-b.y,L=Math.hypot(dx,dy)||1;return{x:dx/L,y:dy/L}}
+function facePose(b,pose){const fam=POSE_FAM[pose]||'qiyam';let f=qiblaDir(b);
+ if(pose==='salamR'||pose==='salamL'){const sg=pose==='salamR'?1:-1,r={x:-f.y*sg,y:f.x*sg},m={x:f.x*.35+r.x,y:f.y*.35+r.y},L=Math.hypot(m.x,m.y);f={x:m.x/L,y:m.y/L}}
+ const[ax,ay]=w2s(b.x,b.y,0),[bx,by]=w2s(b.x+f.x*20,b.y+f.y*20,0),phi=Math.atan2(-(by-ay),bx-ax),c=Math.cos(phi),sn=Math.sin(phi);
+ const lying=fam==='ruku'||fam==='sujud',top=view.tilt<.1;
+ if(top){if(lying){const mir=c>0;return{g:fam+'S',mir,rot:mir?phi:phi-Math.PI,cy:fam==='sujud'?.1:.25,phi}}return{g:fam+'B',mir:false,rot:phi-Math.PI/2,cy:.4,phi}}
+ if(sn>.8)return{g:fam+'B',mir:false,rot:0,cy:0,phi};if(sn<-.8)return{g:fam+'F',mir:false,rot:0,cy:0,phi};
+ const mir=c>0,base=mir?phi:phi-Math.PI;return{g:fam+'S',mir,rot:lying?base*(fam==='sujud'?1:.5):0,cy:lying&&fam==='sujud'?.1:0,phi}}
 function praying(b){return b.place==='prayer'&&b.mode==='seat'&&Math.hypot(b.x-b.sit.x,b.y-b.sit.y)<2}
 function duaTick(dt){duaT-=dt;if(duaT>0)return;duaT=500;const b=bySlug[imamSlug];if(!b||!praying(b))return;const sp=curStep();if(!sp||sp.pose!=='dua')return;
  const key=namaz.id+namaz.g+'|'+Math.floor(performance.now()/6e5)+'|'+Math.floor(sp.t0);if(b.duaKey===key)return;b.duaKey=key;speech={b,t:DUA[0],until:performance.now()+15000}}
@@ -676,7 +715,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='15.5';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15.6';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
