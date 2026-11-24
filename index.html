@@ -66,7 +66,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=15.4"></script>
+<script src="three.min.js?v=15.5"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -90,14 +90,47 @@ function prayerTimes(date){const lat=51.17,lng=71.45,tz=5,R=Math.PI/180,sn=x=>Ma
  const night=24-(ss-sr),por=15/60*night;if(isNaN(f)||sr-f>por)f=sr-por;if(isNaN(is)||is-ss>por)is=ss+por;
  const adj=h=>h+tz-lng/15,mins=[adj(f),adj(dh)+5/60,adj(as)+5/60,adj(ss)+5/60,adj(is)];
  return NAMAZ.map((n,i)=>({id:n[0],name:n[1],t:new Date(Date.UTC(y,m-1,d)+(Math.round(mins[i]*60)-tz*60)*6e4)}))}
-let namazT=0;const QS=new URLSearchParams(location.search),NAMAZ_SIM=QS.get('namaz'),NAMAZ_G=+(QS.get('g')||0),GROUP_MS=6*6e4,GROUP_N=5;
-// все боты совершают каждый намаз: группы по 5 (имам + 4 за ним), каждая ~6 мин; порядок и имамы — детерминированно от даты и намаза
+let namazT=0;const QS=new URLSearchParams(location.search),NAMAZ_SIM=QS.get('namaz'),NAMAZ_G=+(QS.get('g')||0),SIM_T0=performance.now()-(+(QS.get('t')||0))*1000,SIM_FRI=QS.get('fri')==='1',GROUP_N=9;
+// все боты совершают каждый намаз полностью по ханафитскому мазхабу: группы по 9 (имам на коврике + 8 за ним), порядок и имамы — детерминированно от даты и намаза
+function prayerParts(id,fri){if(id==='fajr')return[['sunnah',2,'сунна (муаккада)'],['fard',2,'фард']];
+ if(id==='dhuhr')return fri?[['sunnah',4,'сунна (перед джума)'],['fard',2,'фард джума (джамаат)'],['sunnah',4,'сунна (после джума)'],['sunnah',2,'сунна']]:[['sunnah',4,'сунна (муаккада)'],['fard',4,'фард'],['sunnah',2,'сунна (муаккада)']];
+ if(id==='asr')return[['sunnah',4,'сунна (гайру муаккада)'],['fard',4,'фард']];
+ if(id==='maghrib')return[['fard',3,'фард'],['sunnah',2,'сунна (муаккада)']];
+ return[['sunnah',4,'сунна (гайру муаккада)'],['fard',4,'фард'],['sunnah',2,'сунна (муаккада)'],['witr',3,'витр (ваджиб)']]}
+const TASBIH=[['СубханАллах',33],['Альхамдулиллях',33],['Аллаху Акбар',34]],TLC={};
+// полный цикл каждого ракаата с реалистичной длительностью (сек)
+function timeline(id,fri){const key=id+(fri?'F':'');if(TLC[key])return TLC[key];const st=[];let t=0;const add=(pose,dur,o)=>{st.push(Object.assign({pose,t0:t,t1:t+dur},o));t+=dur};
+ add('gather',20,{k:'gather',txt:'Идут в намазхану, омовение (вуду) сделано'});
+ const parts=prayerParts(id,fri);
+ parts.forEach(([k,n,lab],pi)=>{for(let r=1;r<=n;r++){const o={pi,k,lab,n,r};
+  if(r===1){add('niyyah',3,{...o,txt:'Ният'});add('takbir',3,{...o,txt:'Такбир тахрима: «Аллаху Акбар», руки до ушей'});add('qiyam',5,{...o,txt:'Кыям: сана'})}
+  add('qiyam',8,{...o,txt:'Кыям: аль-Фатиха'});
+  if(k!=='fard'||r<=2)add('qiyam',6,{...o,txt:'Кыям: сура'});
+  if(k==='witr'&&r===3){add('takbir',3,{...o,txt:'Такбир перед кунутом, руки до ушей'});add('qiyam',8,{...o,txt:'Кыям: дуа кунут'})}
+  add('ruku',5,{...o,txt:'Руку: «Субхана Раббияль-Азым» ×3'});add('qawma',3,{...o,txt:'Кавма: «Сами‘аллаху лиман хамидах»'});
+  add('sujud',5,{...o,txt:'Суджуд: «Субхана Раббияль-А‘ля» ×3'});add('jalsa',3,{...o,txt:'Джальса'});add('sujud',5,{...o,txt:'Второй суджуд'});
+  if(r===n){add('qada',10,{...o,txt:'Ка‘да: ташаххуд'});add('qada',7,{...o,txt:'Ка‘да: салават'});add('qada',6,{...o,txt:'Ка‘да: дуа'});add('salamR',3,{...o,txt:'Салям направо'});add('salamL',3,{...o,txt:'Салям налево'})}
+  else if(r%2===0){add('qada',10,{...o,txt:'Ка‘да: ташаххуд'});add('rise',2,{...o,txt:'Вставание'})}
+  else add('rise',2,{...o,txt:'Вставание'})}});
+ add('qada',18,{k:'tasbih',txt:'Аят аль-Курси'});
+ TASBIH.forEach(([w,c],i)=>add('tasbih',c*.6,{k:'tasbih',word:w,cnt:c,ti:i,txt:'Тасбихат: '+w}));
+ add('dua',15,{k:'dua',txt:'Дуа с поднятыми руками'});add('wipe',3,{k:'dua',txt:'Проводит ладонями по лицу'});add('leave',4,{k:'end',txt:'Намаз завершён'});
+ return TLC[key]={steps:st,dur:t*1000,parts}}
+const isFri=t=>astD(t).getUTCDay()===5;
+function stepAt(tl,sec){const st=tl.steps;for(let i=0;i<st.length;i++)if(sec<st[i].t1)return st[i];return st[st.length-1]}
 function seeded(key){let h=2166136261;for(let i=0;i<key.length;i++){h^=key.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return()=>{h=h+0x6D2B79F5>>>0;let t=h;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
 function prayerPlan(t,id){const pool=(D&&D.bots||[]).map(b=>b.slug).sort(),rnd=seeded(fmtDM(t)+'|'+id),o=pool.slice();for(let i=o.length-1;i>0;i--){const j=rnd()*(i+1)|0;[o[i],o[j]]=[o[j],o[i]]}
- const groups=[];for(let i=0;i<o.length;i+=GROUP_N)groups.push(o.slice(i,i+GROUP_N));return{n:o.length,groups,imam:groups[0]?groups[0][0]:null,len:Math.max(1,groups.length)*GROUP_MS}}
+ const groups=[];for(let i=0;i<o.length;i+=GROUP_N)groups.push(o.slice(i,i+GROUP_N));const tl=timeline(id,isFri(t));return{n:o.length,groups,imam:groups[0]?groups[0][0]:null,tl,dur:tl.dur,len:Math.max(1,groups.length)*tl.dur}}
 function namazNow(){const now=new Date(),ts=prayerTimes(now);
- if(NAMAZ_SIM){const n=NAMAZ.find(x=>x[0]===NAMAZ_SIM)||NAMAZ[1],p=ts.find(x=>x.id===n[0]),pl=prayerPlan(p.t,p.id);return{id:n[0],name:n[1],plan:pl,g:Math.min(NAMAZ_G,pl.groups.length-1)}}
- for(const p of ts){if(now<p.t)continue;const pl=prayerPlan(p.t,p.id);if(now-p.t<pl.len)return{id:p.id,name:p.name,plan:pl,g:Math.floor((now-p.t)/GROUP_MS)}}return null}
+ if(NAMAZ_SIM){const n=NAMAZ.find(x=>x[0]===NAMAZ_SIM)||NAMAZ[1],p=ts.find(x=>x.id===n[0]),pl=prayerPlan(p.t,p.id),fri=SIM_FRI||isFri(p.t);if(fri!==isFri(p.t)){pl.tl=timeline(p.id,fri);pl.dur=pl.tl.dur}
+  return{id:n[0],name:fri&&n[0]==='dhuhr'?'Джума':n[1],plan:pl,tl:pl.tl,g:Math.min(NAMAZ_G,pl.groups.length-1),sec:()=>((performance.now()-SIM_T0)/1000)%(pl.dur/1000)}}
+ for(const p of ts){if(now<p.t)continue;const pl=prayerPlan(p.t,p.id);if(now-p.t<pl.len){const g=Math.floor((now-p.t)/pl.dur),g0=p.t.getTime()+g*pl.dur;return{id:p.id,name:isFri(p.t)&&p.id==='dhuhr'?'Джума':p.name,plan:pl,tl:pl.tl,g,sec:()=>(Date.now()-g0)/1000}}}return null}
+function curStep(){return namaz?stepAt(namaz.tl,namaz.sec()):null}
+function partShort(k){return k==='fard'?'фард':k==='witr'?'витр':'сунна'}
+const POSE_RU={niyyah:'ният',takbir:'такбир',qiyam:'кыям',rise:'вставание',ruku:'руку',qawma:'кавма',sujud:'суджуд',jalsa:'джальса',qada:'ка‘да',salamR:'салям',salamL:'салям',tasbih:'тасбихат',dua:'дуа',wipe:'дуа',gather:'идут',leave:'завершён'};
+function stepInfo(sp){if(!sp||!namaz)return null;const sec=namaz.sec();if(sp.k==='tasbih'&&sp.word){const c=Math.min(sp.cnt,Math.floor((sec-sp.t0)/.6)+1);return{short:`Тасбихат: ${sp.word} ${c}/${sp.cnt}`,full:`<b>${namaz.name}</b> · тасбихат: <b>${sp.word} ${c}/${sp.cnt}</b> (33 · 33 · 34)`}}
+ if(sp.k==='tasbih')return{short:'Аят аль-Курси',full:`<b>${namaz.name}</b> · после салама: аят аль-Курси, затем тасбихат`};if(sp.k==='dua')return{short:'Дуа',full:`<b>${namaz.name}</b> · ${sp.txt}`};if(sp.k==='gather')return{short:'Идут на намаз',full:`<b>${namaz.name}</b> · ${sp.txt}`};if(sp.k==='end')return{short:'Намаз завершён',full:`<b>${namaz.name}</b> · намаз завершён`};
+ return{short:`${namaz.name} · ${partShort(sp.k)} · ракаат ${sp.r}/${sp.n} · ${POSE_RU[sp.pose]}`,full:`<b>${namaz.name}</b> · ${sp.lab} · ракаат <b>${sp.r} из ${sp.n}</b> · ${sp.txt}`}}
 const astD=d=>new Date(d.getTime()+5*36e5),fmtHM=d=>{const a=astD(d);return String(a.getUTCHours()).padStart(2,'0')+':'+String(a.getUTCMinutes()).padStart(2,'0')},fmtDM=d=>{const a=astD(d);return String(a.getUTCDate()).padStart(2,'0')+'.'+String(a.getUTCMonth()+1).padStart(2,'0')+'.'+a.getUTCFullYear()};
 function namazState(){const now=new Date(),ts=prayerTimes(now);const cur=namaz?ts.find(p=>p.id===namaz.id):null;const nx=ts.find(p=>p.t>now&&(!cur||p.id!==cur.id))||null;return{now,ts,cur,nx}}
 // кто молился: детерминированно по дате и намазу — одинаково на любом устройстве и после перезагрузки
@@ -257,7 +290,7 @@ function namazTick(){const n=namazNow(),k=n?n.id+n.g:'',was=namaz?namaz.id+namaz
  prayMembers=new Map();imamSlug=null;if(n&&D){(n.plan.groups[n.g]||[]).forEach((sl,i)=>{if(bySlug[sl])prayMembers.set(sl,i)});imamSlug=(n.plan.groups[n.g]||[])[0]||null}
  bots.forEach(b=>{if(b.place==='prayer')b.prayStart=0});assignPlaces(false)}
 // места на полу намазханы: имам на коврике, остальные за ним (джамаат)
-const PRAY_POS=[[31,33],[52,40],[68,32],[50,56],[70,50]];
+const PRAY_POS=[[31,33],[54,24],[72,24],[88,28],[50,42],[68,42],[86,44],[48,58],[66,58]];
 function desired(b){if(prayMembers.has(b.slug)&&zoneById.prayer)return 'prayer';if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='idle')return 'lounge';return 'desk'}
 function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set(),prayer:new Set()};
  bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
@@ -314,11 +347,24 @@ const BASE=[
 "..bb..bb.."];
 const SK=['#f1c9a5','#e0ac80','#c98e62','#f5d6b8'];
 function hsh(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
-function drawSprite(b,x,y,frame){
+const POSES={
+ qiyam:{dy:0,g:["...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.",".sesssses.",".ssssssss.","..ssmmss..","..cccccc..",".cccccccc.",".cccccccc.",".ccsssscc.","..pppppp..","..pp..pp..","..bb..bb.."]},
+ takbir:{dy:0,g:["...hhhh...","..hhhhhh..","shhhhhhhhs","shssssssh s".replace(' ',''),"ssesssseSS".replace(/S/g,'s'),"cssssssssc","c.ssmmss.c","cccccccccc",".cccccccc.",".cccccccc.","..cccccc..","..pppppp..","..pp..pp..","..bb..bb.."]},
+ ruku:{dy:null,g:["..........","..........","..........","..........","..........","hhh.......","hhhcccccpp","sescccccpp","...s....pp","....s...pp",".....ss.pp","........pp","........pp",".......bbb"]},
+ sujud:{dy:null,g:["..........","..........","..........","..........","..........","..........","..........","..........","..........",".....ccpp.","...ccccpp.",".hcccc.pp.","hhss...ppb","hss....ppb"]},
+ sit:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.",".sesssses.",".ssssssss.","..ssmmss..",".cccccccc.",".cccccccc.","ppsppppspp","pppppppppp"]},
+ salamR:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".hsssssss.",".ssssesse.",".ssssssss.","...sssmm..",".cccccccc.",".cccccccc.","ppsppppspp","pppppppppp"]},
+ salamL:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".sssssssh.",".esseesss.",".ssssssss.","..mmsss...",".cccccccc.",".cccccccc.","ppsppppspp","pppppppppp"]},
+ dua:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.",".sesssses.",".ssssssss.","s.ssmmss.s","sscccccss.".replace(/\.$/,'s'),".cccccccc.","pppppppppp","pppppppppp"]},
+ wipe:{dy:3,g:["..........","..........","..........","...hhhh...","..hhhhhh..",".hhhhhhhh.",".hssssssh.","cssssssssc","cssssssssc","c.ssssss.c",".cccccccc.",".cccccccc.","pppppppppp","pppppppppp"]}};
+const POSE_TEX={niyyah:'qiyam',qiyam:'qiyam',rise:'qiyam',qawma:null,takbir:'takbir',ruku:'ruku',sujud:'sujud',jalsa:'sit',qada:'sit',tasbih:'sit',salamR:'salamR',salamL:'salamL',dua:'dua',wipe:'wipe'};
+function poseTex(b,pose){const c=document.createElement('canvas');c.width=32;c.height=54;const k=c.getContext('2d');k.imageSmoothingEnabled=false;k.setTransform(2,0,0,2,0,0);const keep=ctx;ctx=k;drawSprite(b,8,25.6,0,pose);ctx=keep;const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
+function drawSprite(b,x,y,frame,pose){const PG=pose&&POSES[pose],G=PG?PG.g:BASE,dy=PG?PG.dy:0;
  const P=1.6,lk=b.look||{},h=hsh(b.slug);const col={h:lk.hair||'#3a2a1a',s:SK[h%4],e:'#1b1b2a',m:'#b0605a',c:lk.shirt||'#888',p:'#2c3350',b:'#15182a'};
  const px=(c,r,color)=>{ctx.fillStyle=color;ctx.fillRect(x+(c-5)*P,y+(r-14)*P,P+.04,P+.04)};
  ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.ellipse(x,y,7,2.6,0,0,7);ctx.fill();
- for(let r=0;r<14;r++)for(let c=0;c<10;c++){const ch=BASE[r][c];if(ch==='.')continue;if(frame&&r===13&&((c<5)===(frame===1)))continue;if(frame&&r===12&&((c<5)===(frame===1)))continue;px(c,r,col[ch])}
+ for(let r=0;r<14;r++)for(let c=0;c<10;c++){const ch=(G[r]||'')[c];if(!ch||ch==='.')continue;if(frame&&r===13&&((c<5)===(frame===1)))continue;if(frame&&r===12&&((c<5)===(frame===1)))continue;px(c,r,col[ch]||col.s)}
+ if(dy===null)return;const px0=px;{const px=(c,r,cl)=>px0(c,r+dy,cl);
  const st=lk.style||'short';
  if(st==='long'){for(let r=3;r<9;r++){px(0,r,col.h);px(9,r,col.h)}px(1,3,col.h);px(8,3,col.h)}
  if(st==='bun'){px(4,-1,col.h);px(5,-1,col.h);px(4,-2,col.h);px(5,-2,col.h);px(3,-1,col.h);px(6,-1,col.h)}
@@ -332,7 +378,7 @@ function drawSprite(b,x,y,frame){
  if(a==='tie'){px(4,7,'#c62828');px(5,7,'#c62828');px(4,8,'#c62828');px(5,8,'#c62828');px(5,9,'#c62828');px(4,10,'#c62828');px(2,7,'#fff');px(7,7,'#fff')}
  if(a==='headset'){px(0,3,'#444');px(0,4,'#444');px(9,3,'#444');px(9,4,'#444');for(let c=1;c<9;c++)px(c,0,'#444');px(1,5,'#444');px(2,6,'#444')}
  if(a==='beard'){for(let c=2;c<8;c++){px(c,6,col.h)}px(1,5,col.h);px(8,5,col.h);px(2,5,col.h);px(7,5,col.h)}
-}
+}}
 // ---------- мебель и реквизит
 function R(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
 function drawDesk(b){const x=b.desk.x*T,y=b.desk.y*T,on=b.st==='busy'||b.st==='today';
@@ -476,7 +522,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.4';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.5';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -533,7 +579,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.4');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.5');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -561,12 +607,13 @@ function isBust(b){return b.mode==='seat'&&b.place==='desk'&&Math.abs(b.x-b.sit.
 function botH(b){return isBust(b)?4:(b.mode==='seat'?3:.5)}
 function headH(b){return botH(b)+(isBust(b)?21:26)}
 function updateSprites(){bots.forEach(b=>{const s=spr.get(b.slug);if(!s)return;const bust=isBust(b);const moving=(b.mode==='go'||b.mode==='back')&&b.pts&&b.pts.length;
- const play=b.place==='games'&&b.mode==='seat';const pray=praying(b),ph=pray?(animTime%12000)/12000:0,low=pray&&ph>=.55;const i=pray?(low?3:0):bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
- s.obj.scale.set(16,pray?(ph>=.4&&ph<.55?21:low?(ph<.8?15:21):27):bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),pray?1:botH(b),b.y)})}
+ const play=b.place==='games'&&b.mode==='seat';const sp=praying(b)?curStep():null,pk=sp?POSE_TEX[sp.pose]:null;
+ if(pk){s.ptex=s.ptex||{};const tx=s.ptex[pk]||(s.ptex[pk]=poseTex(b,pk));if(s.cur!=='p'+pk){s.obj.material.map=tx;s.obj.material.needsUpdate=true;s.cur='p'+pk}s.obj.scale.set(16,27,1);s.obj.position.set(b.x,1,b.y);return}
+ const pray=false;const i=bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
+ s.obj.scale.set(16,bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),pray?1:botH(b),b.y)})}
 function praying(b){return b.place==='prayer'&&b.mode==='seat'&&Math.hypot(b.x-b.sit.x,b.y-b.sit.y)<2}
-function duaTick(dt){duaT-=dt;if(duaT>0)return;duaT=1000;const b=bySlug[imamSlug];if(!b||!praying(b))return;if(!b.prayStart)b.prayStart=animTime;if(animTime-b.prayStart<6000)return;
- const now=performance.now();if(speech&&speech.b===b&&now<speech.until)return;if(speech&&now<speech.until-800)return;if(b.duaNext&&now<b.duaNext)return;
- const t=DUA[(b.duaI=(b.duaI||0)+1)%DUA.length];speech={b,t,until:now+15000};b.duaNext=now+30000}
+function duaTick(dt){duaT-=dt;if(duaT>0)return;duaT=500;const b=bySlug[imamSlug];if(!b||!praying(b))return;const sp=curStep();if(!sp||sp.pose!=='dua')return;
+ const key=namaz.id+namaz.g+'|'+Math.floor(performance.now()/6e5)+'|'+Math.floor(sp.t0);if(b.duaKey===key)return;b.duaKey=key;speech={b,t:DUA[0],until:performance.now()+15000}}
 // ---------- камера (орбита)
 const TILT3D=.72;
 const _v=new THREE.Vector3(),_o=new THREE.Vector3(),_d=new THREE.Vector3();
@@ -601,7 +648,7 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
   if((b.act.routines||[]).some(r=>r.state==='работает')&&b.mode==='seat'){octx.fillStyle='#fff';octx.beginPath();octx.arc(X-11,Y+9,4,0,7);octx.fill();octx.strokeStyle='#3047b8';octx.lineWidth=1.2;octx.beginPath();octx.moveTo(X-11,Y+9);octx.lineTo(X-11,Y+6.5);octx.moveTo(X-11,Y+9);octx.lineTo(X-9,Y+9);octx.stroke()}
   octx.restore();
   if(b.mode==='talk'&&b.target){const[tx,ty]=w2s(b.target.x,b.target.y,headH(b.target));octx.save();octx.translate(tx+10*k,ty);octx.scale(k,k);bubble(0,-2);octx.restore()}});
-  const im=bySlug[imamSlug];if(namaz&&im&&im.place==='prayer'){const[px,py0]=w2s(im.x,im.y,0),py=py0+30;const t='Намаз: '+namaz.name;octx.font='700 12px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+18;
+  const im=bySlug[imamSlug];if(namaz&&im&&im.place==='prayer'){const[px,py0]=w2s(im.x,im.y,0),py=py0+30;const si=stepInfo(curStep());const t=si?si.short:'Намаз: '+namaz.name;octx.font='700 12px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+18;
   octx.fillStyle='rgba(30,90,70,.92)';rrp(px-tw/2,py-11,tw,20,10);octx.fill();octx.fillStyle='#fff';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,px-tw/2+9,py)}
  const cz=zoneById.cabinet;if(cz&&cz.reception){const rc=cz.reception;const[rx,ry]=w2s((rc.x+1)*T,(rc.y+2)*T+2,0);const t='Приёмная';octx.font='700 11px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+14;
   octx.fillStyle='rgba(255,213,79,.95)';rrp(rx-tw/2,ry-9,tw,17,8);octx.fill();octx.fillStyle='#3e2723';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,rx-tw/2+7,ry)}
@@ -629,7 +676,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='15.4';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15.5';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
@@ -639,13 +686,15 @@ function stats(){if(!D)return;const busy=bots.filter(b=>b.st==='busy').length,to
  const wt=bots.filter(waitOn).length,rest=bots.filter(isReader).length,play=bots.filter(b=>b.place==='games').length;
  document.getElementById('stats').innerHTML=`<b style="color:#ffb300">Ждут тебя ${wt}</b> • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk} • Читают Коран ${rest}${play?` • Играют ${play}`:''}`;
  document.getElementById('upd').textContent='Данные: '+fmtAbs(D.generated)+' (Астана), обновляются сами'}
-setInterval(()=>{stats();updKhatm()},1000);document.getElementById('khatm').onclick=openKhatm;
+setInterval(()=>{stats();updKhatm();if(sel&&prayMembers.has(sel.slug)){const el=document.getElementById('pst');if(el){const si=stepInfo(praying(sel)?curStep():null);el.innerHTML='🕌 '+(si?si.full:'Идёт в намазхану')}}},500);document.getElementById('khatm').onclick=openKhatm;
 // ---------- карточки
 function closeCard(){card.style.display='none';sel=null;selZone=null}
 function showCard(h){card.innerHTML=h;card.style.display='block';card.scrollTop=0;card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]))}
 function namazCard(){const{now}=namazState(),rows=namazRows();const im=bySlug[imamSlug];
  let h=`<div class="row"><span class="k">Сегодня, ${fmtDM(now)} (Астана, ДУМК):</span></div><div class="list">`+rows.map(p=>`<div><span>${p.done?'✓ ':p.cur?'🕌 ':''}${p.name}${p.who?` · ${esc(p.who)}`:''}${p.cur?' · идёт сейчас':p.nx?' · следующий':''}</span><span class="k">${fmtHM(p.t)}</span></div>`).join('')+'</div>';
- h+=`<div class="row">Все боты — мусульмане и совершают каждый из 5 намазов: приходят группами по ${GROUP_N} (имам на коврике лицом к михрабу, остальные за ним), каждая группа ~6 минут. ${namaz&&im?`Сейчас идёт «${namaz.name}»: группа ${namaz.g+1} из ${namaz.plan.groups.length}, имам — ${esc(im.name)}.`:''} После намаза имам делает дуа: «${DUA[0]}»</div>`;
+ const si=namaz?stepInfo(curStep()):null;
+ h+=`<div class="row">Все боты — мусульмане и совершают каждый из 5 намазов полностью, по ханафитскому мазхабу: приходят группами по ${GROUP_N} (имам на коврике лицом к михрабу, остальные за ним). ${namaz&&im?`Сейчас: ${si?si.full:namaz.name} — группа ${namaz.g+1} из ${namaz.plan.groups.length}, имам — ${esc(im.name)}.`:''}</div>`;
+ h+=`<div class="row" style="font-size:12.5px"><b>Ракааты (ханафи):</b> Фаджр — 2 сунна + 2 фард; Зухр — 4 сунна + 4 фард + 2 сунна (в пятницу Джума: 4 сунна + 2 фард джамаатом + 4 сунна + 2 сунна); Аср — 4 сунна + 4 фард; Магриб — 3 фард + 2 сунна; Иша — 4 сунна + 4 фард + 2 сунна + 3 витр (кунут в 3-м ракаате перед руку).<br><b>Каждый ракаат:</b> ният → такбир тахрима → кыям (сана в 1-м ракаате, аль-Фатиха + сура; в 3-м/4-м ракаате фарда — только Фатиха) → руку → кавма → суджуд → джальса → второй суджуд; после каждого 2-го и в последнем ракаате — ка‘да с ташаххудом (в последнем + салават + дуа), затем салям направо и налево.<br><b>После намаза:</b> аят аль-Курси, тасбихат 33 «СубханАллах», 33 «Альхамдулиллях», 34 «Аллаху Акбар», затем дуа с поднятыми руками и проведение ладонями по лицу: «${DUA[0]}»<br><span class="k">Длительность на группу: ${NAMAZ.map(([id,nm])=>nm+' ~'+Math.round(timeline(id,false).dur/6e4)+' мин').join(', ')}.</span></div>`;
  h+=`<div class="row"><span class="k">Последние 7 дней (имам — первой группы):</span></div><div class="list">`;
  for(let d=1;d<=7;d++){const day=new Date(now.getTime()-d*864e5),ts=prayerTimes(day);h+=`<div style="display:block"><b>${fmtDM(day).slice(0,5)}</b> <span class="k" style="font-size:12px">${ts.map(p=>{const pl=prayerPlan(p.t,p.id);return`✓ ${p.name} ${fmtHM(p.t)} — все ${pl.n}, имам ${esc(shortOf(pl.imam))}`}).join(' · ')}</span></div>`}
  return h+'</div>'}
@@ -662,7 +711,7 @@ function openBot(b,keep){sel=b;selZone=zoneById[b.zone];if(!keep){viewIdx=zones.
  let h=`<h2><span class="dot" style="background:${st[0]}"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}${b.boss?' <span class="tag">главный</span>':''}</h2><div class="sub">${esc(b.role)}</div>`;
  if(waitOn(b))h+=`<div class="row" style="background:#fff3d6;border-radius:9px;padding:6px 9px"><b style="color:#a65f00">⏳ Ждёт твоего ответа с ${fmtSince(b.act.asks_since)}</b></div>`;
  else if(b.act.asks_since&&!b.boss)h+=`<div class="row" style="color:#9aa0b5">Ждал ответа с ${fmtSince(b.act.asks_since)} (больше 7 дней, не учитывается)</div>`;
- h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${isReader(b)&&readingMap().m.get(b.slug)?`</div><div class="row">📖 <b>Читает Коран:</b> ${esc(readingMap().m.get(b.slug).txt)}`:''}${b.place==='games'?' · играет в игровой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
+ h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${prayMembers.has(b.slug)?`</div><div class="row" id="pst">🕌 ${(stepInfo(praying(b)?curStep():null)||{full:'Идёт в намазхану'}).full}`:''}${isReader(b)&&readingMap().m.get(b.slug)?`</div><div class="row">📖 <b>Читает Коран:</b> ${esc(readingMap().m.get(b.slug).txt)}`:''}${b.place==='games'?' · играет в игровой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
  h+=`<div class="row"><span class="k">Последняя активность:</span> ${fmtAgo(a.last)} (${fmtAbs(a.last)})</div>`;
  h+=`<div class="row"><span class="k">Сообщений:</span> ${a.d1} за сутки · ${a.d7} за 7 дней · всего ${a.total}</div>`;
  h+=`<div class="spark">${a.days.map(v=>`<i style="height:${v?Math.min(26,4+Math.log2(1+v)*3.5):2}px;opacity:${v?.9:.18}"></i>`).join('')}</div><div class="k" style="font-size:11px">активность за 14 дней</div>`;
@@ -707,7 +756,7 @@ function say(){} // голос фраз выключен: только текс�
 function talkTick(dt){talkT-=dt;if(talkT>0)return;talkT=400;if(speech&&performance.now()>speech.until)speech=null;
  if(!D||view.tilt<.1||ptrs.size)return;if(vw()/view.zoom>190)return; // далеко — молчат
  const f=freeRect(),cx=f.x+f.w/2,cy=f.y+f.h/2,R=Math.min(f.w,f.h)*.3;let best=null,bd=1e9;
- bots.forEach(b=>{const[sx,sy]=w2s(b.x,b.y,headH(b)*.6);const d=Math.hypot(sx-cx,sy-cy);if(d<bd){bd=d;best=b}});
+ bots.forEach(b=>{if(b.place==='prayer'&&!(curStep()&&curStep().k==='dua'&&b.slug===imamSlug))return;const[sx,sy]=w2s(b.x,b.y,headH(b)*.6);const d=Math.hypot(sx-cx,sy-cy);if(d<bd){bd=d;best=b}});
  if(!best||bd>R)return;if(speech&&speech.b===best)return;const now=performance.now();if(best.sayCool&&now<best.sayCool)return;if(speech&&now<speech.until-1500)return;
  const t=pickPhrase(best);best.sayCool=now+8000;speech={b:best,t,until:now+(t.length>120?15000:Math.max(3500,t.length*85))};say(best,t)}
 function drawSpeech(){if(!speech)return;const b=speech.b;const[hx,hy]=w2s(b.x,b.y,headH(b));const long=speech.t.length>120,fz=long?12:13;octx.font='600 '+fz+'px -apple-system,Roboto,sans-serif';
