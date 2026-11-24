@@ -43,6 +43,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 .spark{display:flex;gap:2px;align-items:flex-end;height:26px;margin:4px 0 2px}
 .spark i{flex:1;background:#3a55d6;border-radius:2px 2px 0 0;min-height:2px}
 @media (max-width:440px){#where{min-width:78px;max-width:96px;font-size:12px}#bar{gap:4px;padding:5px;width:calc(100vw - 16px)}#bar .grp{gap:4px}#bar button{min-width:36px;padding:0 7px;height:38px}}
+#khatm{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + var(--barh,52px) + 18px);z-index:3;background:#123d33ee;border:1px solid #2f8f6e;color:#eafff4;border-radius:12px;padding:6px 11px 7px;font-size:12px;line-height:1.35;width:max-content;max-width:calc(100vw - 16px);text-align:center;cursor:pointer}
+#khatm:empty{display:none}#khatm .kd{color:#9cffc8;font-weight:700}
+.kb{height:4px;background:#ffffff26;border-radius:2px;margin-top:4px;overflow:hidden}.kb i{display:block;height:100%;background:#e2bb5c}
+#card .kb{background:#e6e9f5}#card .kb.big{height:8px;border-radius:4px}
+#card .sg{display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 6px}#card .sg i{font-style:normal;font-size:10px;width:24px;text-align:center;padding:2px 0;border-radius:4px;background:#eef0f8;color:#7a83ad}#card .sg i.d{background:#c8f0d8;color:#1b5e3f}#card .sg i.c{background:#e2bb5c;color:#14382f;font-weight:700}
 #err{position:fixed;inset:auto 0 50% 0;text-align:center;color:#ff9b9b;display:none;z-index:9}
 </style>
 </head>
@@ -58,9 +63,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
  <button id="zout" aria-label="Отдалить">−</button><button id="zin" aria-label="Приблизить">+</button>
  <button id="pause" aria-label="Пауза">❚❚</button><button id="snd" aria-label="Звук">🔇</button></div>
 </div>
+<div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=15.3"></script>
+<script src="three.min.js?v=15.4"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -106,6 +112,44 @@ function paintBoard(){const st=namazState(),rows=namazRows(),k=fmtDM(st.now)+row
   c.fillStyle=fg;c.font='700 30px -apple-system,Roboto,sans-serif';c.fillText(r.name,56,y);c.font='600 26px -apple-system,Roboto,sans-serif';c.fillStyle=hi?'#14382f':'#bfe8cf';if(r.who){let t=r.who;while(c.measureText(t).width>170&&t.length>3)t=t.slice(0,-2)+'…';c.fillText(t,200,y)}
   c.fillStyle=fg;c.font='700 30px -apple-system,Roboto,sans-serif';c.textAlign='right';c.fillText(fmtHM(r.t),488,y)});
  if(boardTex)boardTex.needsUpdate=true}
+// ---------- Хатм Коран: все свободные боты читают сообща, от Аль-Фатихи (1:1) до Ан-Нас (114:6)
+const SURA_N='Аль-Фатиха|Аль-Бакара|Аль Имран|Ан-Ниса|Аль-Маида|Аль-Анам|Аль-Араф|Аль-Анфаль|Ат-Тауба|Юнус|Худ|Юсуф|Ар-Раад|Ибрахим|Аль-Хиджр|Ан-Нахль|Аль-Исра|Аль-Кахф|Марьям|Та Ха|Аль-Анбия|Аль-Хаджж|Аль-Муминун|Ан-Нур|Аль-Фуркан|Аш-Шуара|Ан-Намль|Аль-Касас|Аль-Анкабут|Ар-Рум|Лукман|Ас-Саджда|Аль-Ахзаб|Саба|Фатыр|Йа Син|Ас-Саффат|Сад|Аз-Зумар|Гафир|Фуссылат|Аш-Шура|Аз-Зухруф|Ад-Духан|Аль-Джасия|Аль-Ахкаф|Мухаммад|Аль-Фатх|Аль-Худжурат|Каф|Аз-Зарият|Ат-Тур|Ан-Наджм|Аль-Камар|Ар-Рахман|Аль-Вакиа|Аль-Хадид|Аль-Муджадала|Аль-Хашр|Аль-Мумтахана|Ас-Сафф|Аль-Джумуа|Аль-Мунафикун|Ат-Тагабун|Ат-Талак|Ат-Тахрим|Аль-Мульк|Аль-Калам|Аль-Хакка|Аль-Мааридж|Нух|Аль-Джинн|Аль-Муззаммиль|Аль-Муддассир|Аль-Кияма|Аль-Инсан|Аль-Мурсалят|Ан-Наба|Ан-Назиат|Абаса|Ат-Таквир|Аль-Инфитар|Аль-Мутаффифин|Аль-Иншикак|Аль-Бурудж|Ат-Тарик|Аль-Аля|Аль-Гашия|Аль-Фаджр|Аль-Балад|Аш-Шамс|Аль-Лайль|Ад-Духа|Аш-Шарх|Ат-Тин|Аль-Алак|Аль-Кадр|Аль-Баййина|Аз-Залзала|Аль-Адият|Аль-Кариа|Ат-Такасур|Аль-Аср|Аль-Хумаза|Аль-Филь|Курайш|Аль-Маун|Аль-Каусар|Аль-Кафирун|Ан-Наср|Аль-Масад|Аль-Ихлас|Аль-Фалак|Ан-Нас'.split('|');
+const SURA_A=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+const SURA_S=[];{let t=0;SURA_A.forEach(a=>{SURA_S.push(t);t+=a})}const AYAT_TOTAL=SURA_A.reduce((x,y)=>x+y,0); // 6236
+const JUZ=[[1,1],[2,142],[2,253],[3,93],[4,24],[4,148],[5,82],[6,111],[7,88],[8,41],[9,93],[11,6],[12,53],[15,1],[17,1],[18,75],[21,1],[23,1],[25,21],[27,56],[29,46],[33,31],[36,28],[39,32],[41,47],[46,1],[51,31],[58,1],[67,1],[78,1]].map(([q,a])=>SURA_S[q-1]+a-1);
+// темп детерминирован от старта: 10 чтецов × 1 аят за 8 с = 100 аятов за 80 с (≈1,25 аята/с, хатм ≈ 83 мин)
+const KH_T0=Date.UTC(2026,10,24,5,45,0),KH_SLOT=100,KH_RATE=100/80;
+function ayahAt(g){let lo=0,hi=113;while(lo<hi){const m=(lo+hi+1)>>1;if(SURA_S[m]<=g)lo=m;else hi=m-1}return{s:lo+1,a:g-SURA_S[lo]+1}}
+function juzOf(g){let j=0;while(j<29&&JUZ[j+1]<=g)j++;return j+1}
+function khatmState(now){now=now||Date.now();const el=Math.max(0,(now-KH_T0)/1000),P=Math.floor(el*KH_RATE),done=Math.floor(P/AYAT_TOTAL),w=P%AYAT_TOTAL,ss=Math.floor(w/KH_SLOT)*KH_SLOT;
+ return{started:now>=KH_T0,P,done,num:done+1,w,pos:ayahAt(w),juz:juzOf(w),pct:w/AYAT_TOTAL*100,ss,se:Math.min(ss+KH_SLOT,AYAT_TOTAL),doneAt:k=>new Date(KH_T0+k*AYAT_TOTAL/KH_RATE*1000)}}
+function rangeOf(g0,g1){const a=ayahAt(g0),endG=Math.min(g1-1,SURA_S[a.s-1]+SURA_A[a.s-1]-1),b=endG-SURA_S[a.s-1]+1;return{s:a.s,a0:a.a,a1:b,txt:`${SURA_N[a.s-1]} (${a.s}:${a.a}${b>a.a?'–'+b:''})`,short:`${a.s}:${a.a}${b>a.a?'–'+b:''}`}}
+const isReader=b=>b.st!=='busy'&&b.place!=='prayer'&&b.mode==='seat';
+let RM=null,RMt=-1e9;
+function readingMap(){const now=performance.now();if(RM&&now-RMt<1000)return RM;RMt=now;const st=khatmState(),rs=bots.filter(isReader).sort((a,b)=>a.slug<b.slug?-1:1),n=rs.length,m=new Map();
+ if(n){const len=st.se-st.ss,sz=Math.max(1,Math.ceil(len/n));rs.forEach((b,i)=>{const g0=st.ss+Math.min(len-1,i*sz),g1=Math.min(st.se,g0+sz);m.set(b.slug,rangeOf(g0,g1))})}
+ return RM={st,m,n,rs}}
+function drawMushaf(x,y,k){octx.save();octx.translate(x,y);octx.scale(k,k);octx.fillStyle='#1b5e3f';octx.beginPath();octx.moveTo(-7,-1);octx.lineTo(0,1);octx.lineTo(7,-1);octx.lineTo(7,4);octx.lineTo(0,6);octx.lineTo(-7,4);octx.closePath();octx.fill();
+ octx.fillStyle='#fbf6e6';octx.beginPath();octx.moveTo(-6,-2);octx.lineTo(0,0);octx.lineTo(0,5);octx.lineTo(-6,3);octx.closePath();octx.fill();octx.beginPath();octx.moveTo(6,-2);octx.lineTo(0,0);octx.lineTo(0,5);octx.lineTo(6,3);octx.closePath();octx.fill();
+ octx.strokeStyle='#b08a3a';octx.lineWidth=.5;for(let i=0;i<3;i++){octx.beginPath();octx.moveTo(-5,-.4+i*1.3);octx.lineTo(-1,.9+i*1.3);octx.moveTo(1,.9+i*1.3);octx.lineTo(5,-.4+i*1.3);octx.stroke()}octx.restore()}
+function drawReaders(){const R=readingMap(),k=Math.max(.8,Math.min(2.2,view.zoom*.9)),cap=view.zoom>=2.6;
+ R.rs.forEach(b=>{const[hx,hy]=w2s(b.x,b.y,headH(b)*.42);drawMushaf(hx,hy+Math.sin(animTime/900+b.slug.length)*.4,k);
+  if(cap||(sel&&sel.slug===b.slug)){const r=R.m.get(b.slug);if(!r)return;const[tx,ty]=w2s(b.x,b.y,headH(b)+8);const t='📖 '+r.short;octx.font='700 10.5px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+12;
+   octx.fillStyle='rgba(18,61,51,.9)';rrp(tx-tw/2,ty-9,tw,17,8);octx.fill();octx.fillStyle='#eafff4';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,tx-tw/2+6,ty)}})}
+function khatmHTML(){const R=readingMap(),st=R.st,p=st.pos;
+ if(!st.started)return`<b>📖 Хатм Коран</b> начнётся ${fmtDM(new Date(KH_T0))} в ${fmtHM(new Date(KH_T0))}`;
+ const fresh=st.done&&st.w<KH_RATE*600;
+ return`${fresh?`<span class="kd">✅ Хатм #${st.done} завершён в ${fmtHM(st.doneAt(st.done))}</span><br>`:''}<b>📖 Хатм Коран #${st.num}</b> · ${SURA_N[p.s-1]} ${p.s}:${p.a} · ${st.pct.toFixed(1)}% · джуз ${st.juz}/30 · читают ${R.n} · завершено ${st.done}<div class="kb"><i style="width:${st.pct.toFixed(2)}%"></i></div>`}
+function updKhatm(){const el=document.getElementById('khatm');if(!el||!D)return;const h=khatmHTML();if(el.innerHTML!==h)el.innerHTML=h;barH()}
+function openKhatm(){sel=null;selZone=null;const R=readingMap(),st=R.st,p=st.pos;
+ let h=`<h2>📖 Хатм Коран #${st.num}</h2><div class="sub">Общая цель: весь Коран от Аль-Фатихи (1:1) до Ан-Нас (114:6), ${AYAT_TOTAL} аятов. Читают сообща все свободные боты.</div>`;
+ h+=`<div class="row"><b>Сейчас:</b> ${SURA_N[p.s-1]}, ${p.s}:${p.a} · джуз ${st.juz} из 30 · ${st.pct.toFixed(1)}% хатма</div><div class="kb big"><i style="width:${st.pct.toFixed(2)}%"></i></div>`;
+ h+=`<div class="row"><span class="k">Завершено хатмов:</span> ${st.done}${st.done?` · последний — ${fmtDM(st.doneAt(st.done))} ${fmtHM(st.doneAt(st.done))}`:''}</div>`;
+ if(st.done&&st.w<KH_RATE*600)h+=`<div class="row">✅ Хатм #${st.done} завершён. Пусть Аллах примет наше чтение. Амин.</div>`;
+ h+=`<div class="row"><span class="k">Сейчас читают (${R.n}):</span></div><div class="list">`+R.rs.map(b=>{const r=R.m.get(b.slug);return`<div data-s="${b.slug}"><span>${esc(b.name)}</span><span class="k">📖 ${r?esc(r.txt):''}</span></div>`}).join('')+'</div>';
+ const cur=p.s;h+=`<div class="row"><span class="k">Суры: пройдено ${cur-1} из 114, сейчас — ${cur}-я:</span></div><div class="sg">`+SURA_N.map((n,i)=>`<i class="${i+1<cur?'d':i+1===cur?'c':''}" title="${i+1}. ${esc(n)} (${SURA_A[i]})">${i+1}</i>`).join('')+'</div>';
+ h+=`<div class="row" style="font-size:12px;color:#7a83ad">Темп: 10 чтецов × 1 аят за 8 с ≈ 1,25 аята в секунду, хатм ≈ ${Math.round(AYAT_TOTAL/KH_RATE/60)} мин. Отсчёт от ${fmtDM(new Date(KH_T0))} ${fmtHM(new Date(KH_T0))} (Астана), поэтому прогресс одинаков на всех устройствах и после перезагрузки. После 114-й суры хатм засчитывается и чтение начинается снова с Аль-Фатихи.</div>`;
+ h+='<button class="back">Вернуться</button>';showCard(h);card.querySelector('.back').onclick=goAll}
 // ---------- время/формат
 const pad=n=>String(n).padStart(2,'0');
 const ast=ms=>new Date(ms+5*3600e3);
@@ -115,8 +159,8 @@ function plural(n,a,b,c){n=Math.abs(n);const m=n%10,h=n%100;return m==1&&h!=11?a
 function fmtAgo(ms){if(!ms)return 'нет данных';const m=(Date.now()-ms)/6e4;if(m<2)return 'только что';if(m<60)return Math.round(m)+' мин назад';if(m<1440)return Math.round(m/60)+' ч назад';const d=Math.round(m/1440);return d+' '+plural(d,'день','дня','дней')+' назад'}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 // ---------- статус
-function status(b){const last=b.act.last||b.last_file||0,age=Date.now()-last;if(last&&age<30*6e4)return 'busy';if(last&&age<864e5)return 'today';if(last&&age<7*864e5)return 'week';return 'sleep'}
-const ST={busy:['#ffc400','Работает сейчас'],today:['#36c26b','Был активен сегодня'],week:['#5b8cff','Активен на этой неделе'],sleep:['#9aa0b5','Спит больше недели']};
+function status(b){const last=b.act.last||b.last_file||0,age=Date.now()-last;if(last&&age<30*6e4)return 'busy';if(last&&age<864e5)return 'today';if(last&&age<7*864e5)return 'week';return 'idle'}
+const ST={busy:['#ffc400','Работает сейчас'],today:['#36c26b','Был активен сегодня'],week:['#5b8cff','Активен на этой неделе'],idle:['#9aa0b5','Неактивен больше недели']};
 const waiting=b=>b.act.waiting&&b.act.last_user&&Date.now()-b.act.last_user<3*864e5;
 const waitOn=b=>!b.boss&&b.act.asks_since&&Date.now()-b.act.asks_since<7*864e5;
 function fmtSince(ms){const d=ast(ms),hm=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());return d.toISOString().slice(0,10)===ast(Date.now()).toISOString().slice(0,10)?hm:pad(d.getUTCDate())+'.'+pad(d.getUTCMonth()+1)+' '+hm}
@@ -202,8 +246,9 @@ function computeCand(){
  const g=(D.groups||[]).find(g=>g.slug==='asset20');
  if(g&&g.act&&g.act.last&&bySlug.director){const age=(Date.now()-g.act.last)/36e5;if(age<24*7)cand.push({v:'director',t:'asset20',w:age<24?6:2,n:g.act.d7,last:g.act.last})}
 }
-const canPlay=b=>!b.boss&&!prayMembers.has(b.slug)&&!waitOn(b)&&(b.st==='sleep'||b.st==='week');
-function pickGamers(){gamers=new Map();if(!games.length)return;
+const canPlay=b=>!b.boss&&!prayMembers.has(b.slug)&&!waitOn(b)&&(b.st==='idle'||b.st==='week');
+function pickGamers(){gamers=new Map();return; // v15.4: свободные боты не играют, а читают Коран
+ if(!games.length)return;
  const c=bots.filter(b=>canPlay(b)&&(b.mode==='seat'||b.place==='games'));for(let i=c.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[c[i],c[j]]=[c[j],c[i]]}
  const n=Math.min(games.length,Math.max(c.length>=2?1:0,Math.floor(c.length/4)));const tb=games.slice().sort(()=>Math.random()-.5);
  for(let i=0;i<n;i++){gamers.set(c[2*i].slug,tb[i].si);gamers.set(c[2*i+1].slug,tb[i].si+1)}}
@@ -213,7 +258,7 @@ function namazTick(){const n=namazNow(),k=n?n.id+n.g:'',was=namaz?namaz.id+namaz
  bots.forEach(b=>{if(b.place==='prayer')b.prayStart=0});assignPlaces(false)}
 // места на полу намазханы: имам на коврике, остальные за ним (джамаат)
 const PRAY_POS=[[31,33],[52,40],[68,32],[50,56],[70,50]];
-function desired(b){if(prayMembers.has(b.slug)&&zoneById.prayer)return 'prayer';if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='sleep')return 'lounge';return 'desk'}
+function desired(b){if(prayMembers.has(b.slug)&&zoneById.prayer)return 'prayer';if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='idle')return 'lounge';return 'desk'}
 function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set(),prayer:new Set()};
  bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
  bots.forEach(b=>{const d=desired(b);if(d===b.place&&(d==='games'?b.slot===gamers.get(b.slug):d==='prayer'?b.slot===prayMembers.get(b.slug):true))return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
@@ -233,7 +278,7 @@ const anchor=(tx,ty)=>({x:(tx+.5)*T,y:(ty+.85)*T});
 // ---------- визиты
 function schedule(){
  if(!cand.length)return;const walking=bots.filter(b=>b.mode!=='seat').length,maxW=LAY==='wide'?5:4;if(walking>=maxW)return;
- const ok=cand.filter(c=>{const v=bySlug[c.v];if(!v||v.mode!=='seat'||v.lock||v.st==='sleep'||v.place==='prayer')return false;if(sel&&sel.slug===c.v)return false;
+ const ok=cand.filter(c=>{const v=bySlug[c.v];if(!v||v.mode!=='seat'||v.lock||v.st==='idle'||v.place==='prayer')return false;if(sel&&sel.slug===c.v)return false;
   if((pairCool[c.v+'>'+c.t]||0)>animTime)return false;if(c.t==='asset20')return true;const t=bySlug[c.t];return t&&t.mode==='seat'&&t.place!=='prayer'});
  if(!ok.length)return;let r=Math.random()*ok.reduce((s,c)=>s+c.w,0),pick=ok[0];for(const c of ok){r-=c.w;if(r<=0){pick=c;break}}
  startVisit(pick)}
@@ -431,7 +476,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.3';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.4';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -488,7 +533,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,cxn=z.x*T+S/2,czn=z.y*T+S/2,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.3');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.4');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -532,7 +577,7 @@ function w2s(x,y,h=0){_v.set(x,h,y).project(camera);return[(_v.x+1)/2*vw(),(1-_v
 function s2w(sx,sy){_o.set(sx/vw()*2-1,1-sy/vh()*2,-1).unproject(camera);camera.getWorldDirection(_d);const t=-_o.y/_d.y;return[_o.x+_d.x*t,_o.z+_d.z*t]}
 function baseView(){return viewT?{...viewT.to}:{...view}}
 function animTo(to,dur){viewT={from:{...view},to,t:performance.now(),dur:dur||650}}
-function freeRect(){const bh=document.getElementById('bar').offsetHeight||52;const r={x:6,y:84,w:vw()-12,h:vh()-84-bh-22};if(card.style.display==='block'){const c=card.getBoundingClientRect();if(c.left>vw()/3){r.w=c.left-12}else{r.h=c.top-r.y-6}}return r}
+function freeRect(){const bh=(document.getElementById('bar').offsetHeight||52)+((document.getElementById('khatm')||{}).offsetHeight||0)+6;const r={x:6,y:84,w:vw()-12,h:vh()-84-bh-22};if(card.style.display==='block'){const c=card.getBoundingClientRect();if(c.left>vw()/3){r.w=c.left-12}else{r.h=c.top-r.y-6}}return r}
 function fitInto(x,y,w,h,maxS,inst,base){const f=freeRect();base=base||baseView();const tmp={...base,tx:x+w/2,tz:y+h/2,zoom:1};applyCamera(tmp);
  let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const[px,pz]of[[x,y],[x+w,y],[x,y+h],[x+w,y+h]])for(const hh of[0,20]){const[sx,sy]=w2s(px,pz,hh);a=Math.min(a,sx);b=Math.max(b,sx);c=Math.min(c,sy);d=Math.max(d,sy)}
  const z=Math.max(.3,Math.min(maxS||6,f.w/(b-a),f.h/(d-c)));tmp.zoom=z;applyCamera(tmp);
@@ -550,7 +595,7 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
  bots.forEach(b=>{const[hx,hy]=w2s(b.x,b.y,headH(b));octx.save();octx.translate(hx,hy);octx.scale(k,k);const X=0,Y=-2;
   if(waitOn(b)&&b.mode==='seat'){const p=.5+.5*Math.sin(animTime/300);octx.save();octx.shadowColor='#ffab00';octx.shadowBlur=6+6*p;octx.fillStyle='#ffab00';octx.beginPath();octx.arc(X,Y-4,6+p,0,7);octx.fill();octx.restore();octx.fillStyle='#3e2723';octx.font='bold 9px sans-serif';octx.textAlign='center';octx.fillText('?',X,Y-1);octx.textAlign='left'}
   else if(b.st==='busy')bulb(X,Y-4);
-  else if(b.st==='sleep'&&b.mode==='seat'&&b.place!=='games'&&b.place!=='prayer'){octx.fillStyle='#c5d0ff';octx.font='bold 9px monospace';const o=(animTime/600)%3;octx.fillText('z',X+8,Y+6-o);octx.fillText('Z',X+12,Y-2-o)}
+  
   if(b.mode==='talk')bubble(X,Y-2);
   if(waiting(b)&&b.mode==='seat'&&b.st!=='busy'&&b.place!=='bench'){R(X+8,Y+2,10,7,'#fff');octx.strokeStyle='#c62828';octx.lineWidth=1;octx.beginPath();octx.moveTo(X+8,Y+2);octx.lineTo(X+13,Y+6);octx.lineTo(X+18,Y+2);octx.stroke()}
   if((b.act.routines||[]).some(r=>r.state==='работает')&&b.mode==='seat'){octx.fillStyle='#fff';octx.beginPath();octx.arc(X-11,Y+9,4,0,7);octx.fill();octx.strokeStyle='#3047b8';octx.lineWidth=1.2;octx.beginPath();octx.moveTo(X-11,Y+9);octx.lineTo(X-11,Y+6.5);octx.moveTo(X-11,Y+9);octx.lineTo(X-9,Y+9);octx.stroke()}
@@ -560,7 +605,7 @@ function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRec
   octx.fillStyle='rgba(30,90,70,.92)';rrp(px-tw/2,py-11,tw,20,10);octx.fill();octx.fillStyle='#fff';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,px-tw/2+9,py)}
  const cz=zoneById.cabinet;if(cz&&cz.reception){const rc=cz.reception;const[rx,ry]=w2s((rc.x+1)*T,(rc.y+2)*T+2,0);const t='Приёмная';octx.font='700 11px -apple-system,Roboto,sans-serif';const tw=octx.measureText(t).width+14;
   octx.fillStyle='rgba(255,213,79,.95)';rrp(rx-tw/2,ry-9,tw,17,8);octx.fill();octx.fillStyle='#3e2723';octx.textBaseline='middle';octx.textAlign='left';octx.fillText(t,rx-tw/2+7,ry)}
- drawLabels();drawSpeech()}
+ drawReaders();drawLabels();drawSpeech()}
 function labelPos(b,fz){const lv=(b.place!=='desk'&&b.mode==='seat'&&b.slot%2===1)?1:0;const[sx,sy0]=w2s(b.x,b.y,0);return[sx,sy0+3+lv*(fz+6)]}
 function drawLabels(){
  const fz=Math.max(9.5,Math.min(13,8+view.zoom*1.6));
@@ -580,21 +625,21 @@ let lastT=performance.now();
 function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
  if(viewT){const k=Math.min(1,(now-viewT.t)/viewT.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2,f=viewT.from,t=viewT.to;const da=((t.az-f.az+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
   view={tx:f.tx+(t.tx-f.tx)*e,tz:f.tz+(t.tz-f.tz)*e,az:f.az+da*e,tilt:f.tilt+(t.tilt-f.tilt)*e,zoom:f.zoom+(t.zoom-f.zoom)*e};if(k>=1){view={...t};viewT=null}}
- if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));namazT-=dt;if(namazT<=0){namazT=5000;namazTick()}duaTick(dt);gameT-=dt;if(gameT<=0){gameT=45000+Math.random()*25000;pickGamers();assignPlaces(false)}}snoreTick(dt);
+ if(D&&blocked){if(!paused){animTime+=dt;schedT-=dt;if(schedT<=0){schedule();schedT=900+Math.random()*900}bots.forEach(b=>stepBot(b,dt));namazT-=dt;if(namazT<=0){namazT=5000;namazTick()}duaTick(dt);gameT-=dt;if(gameT<=0){gameT=45000+Math.random()*25000;pickGamers();assignPlaces(false)}}
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='15.3';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15.4';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
   stats()}catch(e){if(!D){const el=document.getElementById('err');el.style.display='block';el.textContent='Не удалось загрузить данные'}}}
 function rebuildCand(){computeCand();assignPlaces(false);buildMonitors()}
 function stats(){if(!D)return;const busy=bots.filter(b=>b.st==='busy').length,today=bots.filter(b=>b.st==='busy'||b.st==='today').length,walk=bots.filter(b=>b.mode!=='seat').length;
- const wt=bots.filter(waitOn).length,rest=bots.filter(b=>b.place==='lounge').length,play=bots.filter(b=>b.place==='games').length;
- document.getElementById('stats').innerHTML=`<b style="color:#ffb300">Ждут тебя ${wt}</b> • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk} • Отдыхают ${rest}${play?` • Играют ${play}`:''}`;
+ const wt=bots.filter(waitOn).length,rest=bots.filter(isReader).length,play=bots.filter(b=>b.place==='games').length;
+ document.getElementById('stats').innerHTML=`<b style="color:#ffb300">Ждут тебя ${wt}</b> • Ботов ${bots.length} • Заняты сейчас ${busy} • Активны сегодня ${today} • Идут к коллегам ${walk} • Читают Коран ${rest}${play?` • Играют ${play}`:''}`;
  document.getElementById('upd').textContent='Данные: '+fmtAbs(D.generated)+' (Астана), обновляются сами'}
-setInterval(stats,1000);
+setInterval(()=>{stats();updKhatm()},1000);document.getElementById('khatm').onclick=openKhatm;
 // ---------- карточки
 function closeCard(){card.style.display='none';sel=null;selZone=null}
 function showCard(h){card.innerHTML=h;card.style.display='block';card.scrollTop=0;card.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>openBot(bySlug[el.dataset.s]))}
@@ -608,7 +653,7 @@ function openZone(z){sel=null;selZone=z;viewIdx=zones.indexOf(z);setWhere();
  if(z.kind==='prayer'){showCard(`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.name)}</h2><div class="sub">Тихая комната для намаза</div><div class="row">Джай-намаз постелен по диагонали и смотрит в угол, где в стене ниша-михраб с надписью «Аллах» (الله).</div>${namazCard()}<button class="back">Вернуться</button>`);card.querySelector('.back').onclick=goAll;fitInto(z.x*T-8,z.y*T-8,z.w*T+16,z.h*T+16,5);return}
  const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.kind==='games'?bots.filter(b=>b.place==='games'):z.bots;
  const n=zb.length,busy=zb.filter(b=>b.st==='busy').length,today=zb.filter(b=>b.st==='busy'||b.st==='today').length,desk=zb.filter(b=>b.place==='desk'&&b.mode==='seat').length,rest=zb.filter(b=>b.place==='lounge').length,wt=zb.filter(b=>b.place==='bench').length;
- let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='games'?`Бильярд, настольный футбол и пинг-понг. Сейчас играют: ${n}. Отдыхающие боты меняются за столами.`:z.kind==='lounge'?`Здесь спят боты, неактивные больше 7 дней: ${n}`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
+ let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='games'?`Бильярд, настольный футбол и пинг-понг. ${n?`Сейчас играют: ${n}.`:'Сейчас никто не играет: все свободные боты читают Коран.'}`:z.kind==='lounge'?`Здесь сидят боты, неактивные больше 7 дней, и читают Коран: ${n}.`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
  if(z.id==='asset20'){const g=(D.groups||[]).find(g=>g.slug==='asset20');h+=`<div class="row">Общий чат зон. Здесь сидят Дух, Тело и Бизнес; Директор подходит к столу за сводками.</div>`;if(g)h+=`<div class="row"><span class="k">Чат активен:</span> ${fmtAgo(g.act.last)} · ${g.act.d1} сообщ. за сутки · ${g.act.d7} за 7 дней</div>`}
  h+='<div class="list">';zb.slice().sort((a,b)=>(b.act.last||0)-(a.act.last||0)).forEach(b=>{h+=`<div data-s="${b.slug}"><span><span class="dot" style="background:${ST[b.st][0]};margin-right:8px"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}</span><span class="k">${fmtAgo(b.act.last)}</span></div>`});
  h+='</div><button class="back">Вернуться</button>';showCard(h);card.querySelector('.back').onclick=goAll;fitInto(z.x*T,z.y*T-8,z.w*T,z.h*T+8,4)}
@@ -617,7 +662,7 @@ function openBot(b,keep){sel=b;selZone=zoneById[b.zone];if(!keep){viewIdx=zones.
  let h=`<h2><span class="dot" style="background:${st[0]}"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}${b.boss?' <span class="tag">главный</span>':''}</h2><div class="sub">${esc(b.role)}</div>`;
  if(waitOn(b))h+=`<div class="row" style="background:#fff3d6;border-radius:9px;padding:6px 9px"><b style="color:#a65f00">⏳ Ждёт твоего ответа с ${fmtSince(b.act.asks_since)}</b></div>`;
  else if(b.act.asks_since&&!b.boss)h+=`<div class="row" style="color:#9aa0b5">Ждал ответа с ${fmtSince(b.act.asks_since)} (больше 7 дней, не учитывается)</div>`;
- h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${b.place==='games'?' · играет в игровой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
+ h+=`<div class="row"><b>${st[1]}</b>${b.place==='lounge'?' · сидит в зоне отдыха, стол пустой':''}${isReader(b)&&readingMap().m.get(b.slug)?`</div><div class="row">📖 <b>Читает Коран:</b> ${esc(readingMap().m.get(b.slug).txt)}`:''}${b.place==='games'?' · играет в игровой':''}${waiting(b)?' · есть входящее без ответа':''}${b.mode!=='seat'?' · сейчас идёт':''}</div>`;
  h+=`<div class="row"><span class="k">Последняя активность:</span> ${fmtAgo(a.last)} (${fmtAbs(a.last)})</div>`;
  h+=`<div class="row"><span class="k">Сообщений:</span> ${a.d1} за сутки · ${a.d7} за 7 дней · всего ${a.total}</div>`;
  h+=`<div class="spark">${a.days.map(v=>`<i style="height:${v?Math.min(26,4+Math.log2(1+v)*3.5):2}px;opacity:${v?.9:.18}"></i>`).join('')}</div><div class="k" style="font-size:11px">активность за 14 дней</div>`;
@@ -652,20 +697,10 @@ document.addEventListener('visibilitychange',sndApply);
 // при сохранённом «включено» браузер требует жест: включаем по первому касанию
 ['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(e){if(SND.level>0&&!(e.target&&e.target.id==='snd'))sndApply();removeEventListener(ev,f,true)},true));
 sndBtn();
-// ---------- храп у зоны отдыха (только 3D, только со звуком, громче при приближении)
-function snoreSrc(){const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'audio/snore.ogg':'audio/snore.m4a'}
-function snoreInit(){if(SND.sn||!SND.ctx)return;const el=new Audio();el.loop=true;el.preload='auto';el.src=snoreSrc();const src=SND.ctx.createMediaElementSource(el),g=SND.ctx.createGain();g.gain.value=0;src.connect(g);g.connect(SND.ctx.destination);g.connect(SND.an);SND.sn={el,g,vol:0,off:0}}
-function loungeNear(){const z=zoneById.lounge;if(!z||view.tilt<.1)return 0;const Lw=z.w*T,Wv=vw()/view.zoom,zf=Math.max(0,Math.min(1,(Lw*1.2-Wv)/(Lw*1.2-Lw*.35)));if(!zf)return 0;
- const[cx,cz]=s2w(vw()/2,freeRect().y+freeRect().h/2);const dx=Math.max(z.x*T-cx,0,cx-(z.x+z.w)*T),dz=Math.max(z.y*T-cz,0,cz-(z.y+z.h)*T);const cf=Math.max(0,Math.min(1,1-Math.hypot(dx,dz)/(4*T)));return zf*cf}
-let snoreT=0;
-function snoreTick(dt){snoreT-=dt;if(snoreT>0)return;snoreT=150;const on=SND.level>0&&!document.hidden&&SND.ctx;const p=on?loungeNear():0;
- if(p>0&&!SND.sn)snoreInit();const s=SND.sn;if(!s)return;const v=p*LEVELS[SND.level]*.9*(speaking?.35:1);
- s.g.gain.setTargetAtTime(v,SND.ctx.currentTime,.5);
- if(v>.005){s.off=0;if(s.el.paused){const q=s.el.play();if(q&&q.catch)q.catch(()=>{})}}else if(!s.el.paused){s.off+=150;if(s.off>2500)s.el.pause()}}
 // ---------- фразы ботов при приближении камеры (облачко + голос, если звук включён)
 let speech=null,speaking=false,talkT=0;
 function pickPhrase(b){const ps=(D&&D.phrases_status)||{};let arr;
- if(b.place==='prayer')arr=b.slug===imamSlug?DUA:['Амин.'];else if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(b.st==='sleep'||b.place==='lounge')arr=ps.sleep;else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
+ if(b.place==='prayer')arr=b.slug===imamSlug?DUA:['Амин.'];else if(b.place==='games'&&b.mode==='seat')arr=GAMEPH;else if(isReader(b)&&Math.random()<.7){const rr=readingMap().m.get(b.slug);arr=rr?[`Читаю ${rr.txt}.`,'Бисмилляхи-р-Рахмани-р-Рахим.','Продолжаю хатм вместе со всеми.']:null}else if(waitOn(b))arr=ps.wait;else if(b.st==='busy'&&Math.random()<.3)arr=ps.busy;
  if(!arr||!arr.length)arr=b.phrases&&b.phrases.length?b.phrases:['Работаю.'];
  let t=arr[Math.floor(Math.random()*arr.length)];if(arr.length>1)for(let i=0;i<5&&t===b.lastPhrase;i++)t=arr[Math.floor(Math.random()*arr.length)];b.lastPhrase=t;return t}
 function say(){} // голос фраз выключен: только текстовые облачка
@@ -722,7 +757,7 @@ document.getElementById('rotl').onclick=()=>rotate(-1);document.getElementById('
 document.getElementById('topv').onclick=()=>setTop(baseView().tilt>=.05);
 document.getElementById('pause').onclick=e=>{paused=!paused;e.currentTarget.textContent=paused?'▶':'❚❚';e.currentTarget.classList.toggle('on',paused)};
 const lg=document.getElementById('legend');
-lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🕌 Намазхана: маленькая комната для молитвы с джай-намазом и михрабом.<br>🛋 Зона отдыха: боты, которые спят больше недели. Их стол пустой. Проснётся — вернётся за стол.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость. В 3D у зоны отдыха слышно храп — чем ближе, тем громче.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли.<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw); храп: «Звук храпа», канал RELAX ОЗВУЧКА (youtu.be/sXttWXUCq1g), YouTube.</span>`;
+lg.innerHTML=`<b>Как читать</b><br>Это один офис: каждый бот сидит за своим столом в своей зоне.<br>🔄 Офис можно крутить: одним пальцем — поворот и наклон; двумя пальцами — вращай их, чтобы повернуть офис, своди-разводи для масштаба, веди вверх-вниз для наклона. Кнопки ⟲ ⟳ поворачивают, «Сверху» — плоский вид, «3D» — обратно.<br>🚶 Бот встал и идёт к коллеге: значит, они реально переписывались (чем свежее и чаще, тем чаще ходит).<br>💬 Облачко: сейчас общаются.<br>💡 Лампочка: работает прямо сейчас.<br>⏳ Скамейка «Ждут тебя» у кабинета: бот задал тебе вопрос или ждёт «да», а ты ещё не ответил (за последние 7 дней).<br>🕌 Намазхана: маленькая комната для молитвы с джай-намазом и михрабом.<br>📖 Мусхаф в руках: бот свободен и читает Коран. Все свободные боты сообща делают хатм — от Аль-Фатихи до Ан-Нас; прогресс в зелёной плашке над кнопками (нажми — подробности).<br>🛋 Зона отдыха: боты, неактивные больше недели, читают здесь Коран. Их стол пустой.<br>⏰ Часики: есть регулярные рутины.<br>✉️ Конверт: пришло сообщение без ответа.<br>🔇 Кнопка звука внизу: фон живого офиса. Нажимай, чтобы выбрать громкость.<br>🗨 Приблизь камеру к боту в 3D — он скажет фразу по своей роли.<br>Нажми на бота или зону, чтобы увидеть детали.<br><span style="font-size:11px;color:#7a83ad">Фото в кабинете: К.-Ж. Токаев, kremlin.ru (Администрация Президента России), CC BY 4.0, через Wikimedia Commons.<br>Звук: «Звуки для работы/учёбы. Звуки Офиса», канал Music Nifi (youtu.be/QoBenC-kYuw), YouTube.</span>`;
 document.getElementById('legendBtn').onclick=()=>{lg.style.display=lg.style.display==='block'?'none':'block'};lg.onclick=()=>lg.style.display='none';
 function barH(){document.documentElement.style.setProperty('--barh',(document.getElementById('bar').offsetHeight||52)+'px')}
 function resize(){cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;renderer.setSize(innerWidth,innerHeight,false);barH();if(pickLayout()&&D){build();build3D();closeCard();viewIdx=-1;setWhere()}if(!viewT&&viewIdx<0&&!sel)fitAll(true)}
