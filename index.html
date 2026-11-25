@@ -66,7 +66,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=16.2"></script>
+<script src="three.min.js?v=16.3"></script>
 <script>
 'use strict';
 THREE.ColorManagement.legacyMode=false; // v16: цвета в sRGB → линейные, честное освещение
@@ -75,7 +75,7 @@ const cv=document.getElementById('c'),octx=cv.getContext('2d'),gcv=document.getE
 let ctx=octx;const floorCv=document.createElement('canvas'),fctx=floorCv.getContext('2d');
 let D=null,LAY=null,L=null,W=24,H=36,zones=[],zoneById={},bots=[],bySlug={},links=[];
 let blocked=null,seatSet=new Set(),reserved=new Set(),decor=[],cand=[],pairCool={},bench=[],lounge=[],sofas=[],games=[],gameSlots=[],gamers=new Map(),gameT=0;
-let view={tx:200,tz:300,az:0,tilt:.72,zoom:1},viewT=null,paused=false,sel=null,selZone=null,viewIdx=-1,animTime=0,schedT=0;
+let view={tx:200,tz:300,az:Math.PI/4,tilt:.96,zoom:1},viewT=null,paused=false,sel=null,selZone=null,viewIdx=-1,animTime=0,schedT=0;
 // ---------- время намаза (Астана, метод ДУМК: Фаджр/Иша 15°, Аср по ханафи, +3 мин ихтият)
 const NAMAZ=[['fajr','Фаджр'],['dhuhr','Зухр'],['asr','Аср'],['maghrib','Магриб'],['isha','Иша']];
 const DUA=['О Аллах, дай баракат во всех наших начинаниях и в нашей работе. Если в этом деле есть благо для нас, для нашей веры, жизни и семей, даруй нам его, облегчи наш путь и благослови его. А если блага в нём нет, отведи его от нас и предопредели нам благо, где бы оно ни было. Сделай наш заработок чистым и дозволенным, а наш труд полезным для людей. Амин.'];
@@ -199,12 +199,23 @@ const waiting=b=>b.act.waiting&&b.act.last_user&&Date.now()-b.act.last_user<3*86
 const waitOn=b=>!b.boss&&b.act.asks_since&&Date.now()-b.act.asks_since<7*864e5;
 function fmtSince(ms){const d=ast(ms),hm=pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());return d.toISOString().slice(0,10)===ast(Date.now()).toISOString().slice(0,10)?hm:pad(d.getUTCDate())+'.'+pad(d.getUTCMonth()+1)+' '+hm}
 // ---------- раскладка
-function pickLayout(){const k=innerWidth/innerHeight<1.3?'tall':'wide';if(k===LAY)return false;LAY=k;return true}
+// v16.3: раздвигаем зоны — между платформами всегда минимум 2 клетки пустоты
+function expandLayout(L0){const Z=L0.zones,ids=Object.keys(Z),xs=[...new Set(ids.map(k=>Z[k][0]))].sort((a,b)=>a-b),ys=[...new Set(ids.map(k=>Z[k][1]))].sort((a,b)=>a-b),G=1;
+ const ax=x=>G*xs.filter(v=>v<x).length,ay=y=>G*ys.filter(v=>v<y).length;
+ const inZ=(x,y)=>ids.find(k=>{const[a,b,w,h]=Z[k];return x>=a&&x<a+w&&y>=b&&y<b+h});
+ const mp=(x,y)=>{const k=inZ(x,y);if(k){const[a,b]=Z[k];return[x+ax(a),y+ay(b)]}return[x+ax(x),y+ay(y)]};
+ const L={...L0,W:L0.W+G*(xs.length-1),H:L0.H+G*(ys.length-1),zones:{}};ids.forEach(k=>{const[a,b,w,h]=Z[k];L.zones[k]=[a+ax(a),b+ay(b),w,h]});
+ if(L0.bench){const[x,y]=mp(L0.bench[0],L0.bench[1]);L.bench=[x,y,L0.bench[2]]}
+ if(L0.decor)L.decor=L0.decor.map(e=>{const[x,y]=mp(e[1],e[2]);return[e[0],x,y]});
+ if(L0.games)L.games=L0.games.map(e=>{const[x,y]=mp(e[1],e[2]);return[e[0],x,y,...e.slice(3)]});
+ if(L0.reception)L.reception=mp(L0.reception[0],L0.reception[1]);
+ L.mp=mp;return L}
+function pickLayout(){const k=innerWidth/innerHeight<1.3?'tall':'wide';if(k===LAY)return false;LAY=k;if(view.tilt>.1){view.az=AZ3D();view.tilt=TILT3D}return true}
 const key=(x,y)=>y*W+x;
 function block(x,y){if(x>=0&&y>=0&&x<W&&y<H)blocked[key(x,y)]=1}
 const free=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&!blocked[key(x,y)];
 function build(){
- if(!D)return;L=D.layouts[LAY];W=L.W;H=L.H;blocked=new Uint8Array(W*H);seatSet=new Set();reserved=new Set();decor=[];bench=[];lounge=[];sofas=[];games=[];gameSlots=[];
+ if(!D)return;L=expandLayout(D.layouts[LAY]);W=L.W;H=L.H;blocked=new Uint8Array(W*H);seatSet=new Set();reserved=new Set();decor=[];bench=[];lounge=[];sofas=[];games=[];gameSlots=[];
  for(let x=0;x<W;x++){block(x,0);block(x,H-1)}for(let y=0;y<H;y++){block(0,y);block(W-1,y)}
  zones=D.zones.filter(z=>L.zones[z.id]).map(z=>{const[x,y,w,h]=L.zones[z.id];return Object.assign({},z,{x,y,w,h,bots:[]})});zoneById={};zones.forEach(z=>zoneById[z.id]=z);
  const prev={};bots.forEach(b=>prev[b.slug]=b);
@@ -256,13 +267,13 @@ function build(){
     b.stand=[[dx-1,sy],[dx+2,sy],[dx,sy-1],[dx+1,sy-1],[dx-1,sy+1],[dx+2,sy+1]]});
    if(free(z.x+z.w-1,z.y)){block(z.x+z.w-1,z.y);decor.push({t:'plant',x:z.x+z.w-1,y:z.y})}
    // низкая перегородка слева с проходом посередине
-   if(z.x>2&&!blocked[key(z.x-1,z.y+1)]){const mid=z.y+Math.floor(z.h/2);for(let y=z.y;y<z.y+z.h;y++){if(y===mid||y===mid-1)continue;block(z.x-1,y);decor.push({t:'part',x:z.x-1,y})}}
+   if(false&&z.x>2&&!blocked[key(z.x-1,z.y+1)]){const mid=z.y+Math.floor(z.h/2);for(let y=z.y;y<z.y+z.h;y++){if(y===mid||y===mid-1)continue;block(z.x-1,y);decor.push({t:'part',x:z.x-1,y})}}
   }
  });
  // кулер и диван в свободных местах
  (L.decor||[]).forEach(e=>{if(free(e[1],e[2])){block(e[1],e[2]);decor.push({t:e[0],x:e[1],y:e[2]})}});
  if(L.bench)for(let i=0;i<L.bench[2];i+=2)bench.push({x:L.bench[0]+i,y:L.bench[1]});
- const extra=LAY==='wide'?[]:[{t:'cooler',x:22,y:9,w:1}];
+ const extra=LAY==='wide'?[]:[{t:'cooler',x:L.mp(22,9)[0],y:L.mp(22,9)[1],w:1}];
  extra.forEach(e=>{let ok=true;for(let i=0;i<e.w;i++)if(!free(e.x+i,e.y))ok=false;if(ok){for(let i=0;i<e.w;i++)block(e.x+i,e.y);decor.push(e)}});
  bots.forEach(b=>{seatSet.add(key(b.seat.x,b.seat.y));const p=prev[b.slug];
   b.x=b.sit.x;b.y=b.sit.y;b.mode='seat';b.talkWith=null;b.lock=0;b.deskSeat=b.seat;b.deskSit=b.sit;b.place='desk';b.slot=null});
@@ -273,35 +284,57 @@ function build(){
   for(let x=z.x;x<z.x+z.w;x++){S.n.push([x,z.y,x,z.y-1]);S.s.push([x,z.y+z.h-1,x,z.y+z.h])}
   for(let y=z.y;y<z.y+z.h;y++){S.w.push([z.x,y,z.x-1,y]);S.e.push([z.x+z.w-1,y,z.x+z.w,y])}
   const draw={};for(const k in S)draw[k]=S[k].some(t=>free(t[2],t[3]));
-  let door=null;for(const k of['s','e','w','n']){if(!draw[k])continue;const a=S[k],ok=i=>{const t=a[i];return t&&free(t[0],t[1])&&free(t[2],t[3])&&!seatSet.has(key(t[0],t[1]))&&!seatSet.has(key(t[2],t[3]))};
-   const c=[];for(let i=0;i<a.length-1;i++)if(ok(i)&&ok(i+1))c.push(i);if(c.length){const m=(a.length-2)/2;c.sort((p,q)=>Math.abs(p-m)-Math.abs(q-m));door={side:k,i:c[0]};break}}
+  let door=null;for(const strict of[1,0]){for(const k of['s','e','w','n']){if(!draw[k])continue;const a=S[k],ok=i=>{const t=a[i];return t&&free(t[0],t[1])&&free(t[2],t[3])&&!seatSet.has(key(t[0],t[1]))&&!seatSet.has(key(t[2],t[3]))&&(!strict||free(2*t[2]-t[0],2*t[3]-t[1]))};
+   const c=[];for(let i=0;i<a.length-1;i++)if(ok(i)&&ok(i+1))c.push(i);if(c.length){const m=(a.length-2)/2;c.sort((p,q)=>Math.abs(p-m)-Math.abs(q-m));door={side:k,i:c[0]};break}}if(door)break}
   for(const k in S){if(!draw[k])continue;S[k].forEach((t,i)=>{if(door&&door.side===k&&(i===door.i||i===door.i+1))return;eBlk(key(t[0],t[1]),key(t[2],t[3]))})}
   z.glass={draw,door}});
- // v16.2: каждая зона — отдельная платформа на своей высоте; вход только по ступеням
- GR=new Float32Array(W*H);STAIR=new Map();const zAt=new Int16Array(W*H).fill(-1);
+ // v16.3: каждая зона — отдельная платформа на своём этаже; между ними пустота, мостики и лестницы
+ GR=new Float32Array(W*H);STAIR=new Map();WALK=new Uint8Array(W*H);const zAt=new Int16Array(W*H).fill(-1);
  zones.forEach((z,i)=>{z.h3=ZH[z.id]!=null?ZH[z.id]:ZH2[i%ZH2.length];z.ext={e:0};z.stairs=[];
   for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++){GR[key(x,y)]=z.h3;zAt[key(x,y)]=i}});
  const pz=zoneById.prayer;if(pz){const xe=pz.x+pz.w;let ok=xe<W;for(let y=pz.y;y<pz.y+pz.h&&ok;y++)if(free(xe,y)||zAt[key(xe,y)]>=0)ok=false;if(ok){pz.ext.e=1;for(let y=pz.y;y<pz.y+pz.h;y++)GR[key(xe,y)]=pz.h3}}
- const addStair=(z,ox,oy,dx,dy,door)=>{const k=key(ox,oy);if(STAIR.has(k))return false;const nx=ox-dx,ny=oy-dy,h0=door&&nx>=0&&ny>=0&&nx<W&&ny<H?(GR[key(nx,ny)]||0):0;STAIR.set(k,{dx,dy,h:z.h3,h0,door});z.stairs.push({x:ox,y:oy,dx,dy,h0});return true};
- const doorStairs=z=>{const d=z.door;for(let y=d.y;y<d.y+d.h;y++)for(let x=d.x;x<d.x+d.w;x++){let dx=0,dy=0;if(d.h===1)dy=y<z.y?1:-1;else dx=x<z.x?1:-1;addStair(z,x,y,dx,dy,1)}};
+ const inb=(x,y)=>x>=0&&y>=0&&x<W&&y<H,cor=(x,y)=>inb(x,y)&&free(x,y)&&zAt[key(x,y)]<0&&!STAIR.has(key(x,y))&&!seatSet.has(key(x,y));
+ // лестница: inner — клетка у края зоны; если снаружи свободно, лестница в 2 клетки
+ const addStair=(z,ox,oy,dx,dy,door)=>{const k=key(ox,oy);if(STAIR.has(k))return false;const nx=ox-dx,ny=oy-dy,two=cor(nx,ny)&&cor(nx-dx,ny-dy)&&!door;
+  const h0=door&&inb(nx,ny)&&zAt[key(nx,ny)]>=0?GR[key(nx,ny)]:0,len=two?2:1;
+  STAIR.set(k,{dx,dy,h:z.h3,h0,seg:len-1,len,door,z});if(two)STAIR.set(key(nx,ny),{dx,dy,h:z.h3,h0,seg:0,len,door,z});
+  z.stairs.push({x:ox,y:oy,dx,dy,h0,len});return true};
+ const doorStairs=z=>{const d=z.door;for(let y=d.y;y<d.y+d.h;y++)for(let x=d.x;x<d.x+d.w;x++){let dx=0,dy=0;if(d.h===1)dy=y<z.y?1:-1;else dx=x<z.x?1:-1;
+   const k=key(x,y),nx=x-dx,ny=y-dy,two=cor(nx,ny)&&cor(nx-dx,ny-dy),h0=inb(nx,ny)&&zAt[key(nx,ny)]>=0?GR[key(nx,ny)]:0,len=two?2:1;
+   STAIR.set(k,{dx,dy,h:z.h3,h0,seg:len-1,len,door:1,z});if(two)STAIR.set(key(nx,ny),{dx,dy,h:z.h3,h0,seg:0,len,door:1,z});z.stairs.push({x,y,dx,dy,h0,len})}};
  zones.forEach(z=>{if((z.kind==='cabinet'||z.kind==='prayer')&&z.door)doorStairs(z)});
  const zEdges={};
  zones.forEach((z,zi)=>{
   if(z.kind==='cabinet'||z.kind==='prayer')return;
   const E={n:[],s:[],w:[],e:[]};for(let x=z.x;x<z.x+z.w;x++){E.n.push([x,z.y,x,z.y-1,0,1]);E.s.push([x,z.y+z.h-1,x,z.y+z.h,0,-1])}
   for(let y=z.y;y<z.y+z.h;y++){E.w.push([z.x,y,z.x-1,y,1,0]);E.e.push([z.x+z.w-1,y,z.x+z.w,y,-1,0])}
-  if(z.kind==='table'){const g=z.glass;if(g&&g.door){const a=E[g.door.side];[g.door.i,g.door.i+1].forEach(i=>{const t=a[i];if(t)addStair(z,t[2],t[3],t[4],t[5])})}return}
-  const ok=t=>t&&free(t[0],t[1])&&free(t[2],t[3])&&!seatSet.has(key(t[0],t[1]))&&!seatSet.has(key(t[2],t[3]))&&zAt[key(t[2],t[3])]<0&&!STAIR.has(key(t[2],t[3]));
-  const opts=[];for(const k of['s','n','e','w']){const a=E[k],c=[];for(let i=0;i<a.length-1;i++)if(ok(a[i])&&ok(a[i+1]))c.push(i);if(c.length){const m=(a.length-2)/2;c.sort((p,q)=>Math.abs(p-m)-Math.abs(q-m));opts.push({k,i:c[0],n:c.length})}}
-  opts.sort((p,q)=>q.n-p.n);const pick=opts.slice(0,z.w*z.h>=60?2:1),keep=new Set();
-  pick.forEach(o=>{const a=E[o.k];[o.i,o.i+1].forEach(i=>{const t=a[i];if(addStair(z,t[2],t[3],t[4],t[5]))keep.add(o.k+i)})});
+  const keep=new Set();
+  if(z.kind==='table'){const g=z.glass;if(g&&g.door){const a=E[g.door.side];[g.door.i,g.door.i+1].forEach(i=>{const t=a[i];if(t&&addStair(z,t[2],t[3],t[4],t[5]))keep.add(g.door.side+i)})}}
+  else{const ok=t=>t&&free(t[0],t[1])&&!seatSet.has(key(t[0],t[1]))&&cor(t[2],t[3])&&cor(t[2]-t[4],t[3]-t[5]);
+   const opts=[];for(const k of['s','n','e','w']){const a=E[k],c=[];for(let i=0;i<a.length-1;i++)if(ok(a[i])&&ok(a[i+1]))c.push(i);if(c.length){const m=(a.length-2)/2;c.sort((p,q)=>Math.abs(p-m)-Math.abs(q-m));opts.push({k,i:c[0],n:c.length})}}
+   opts.sort((p,q)=>q.n-p.n);opts.slice(0,z.w*z.h>=60?2:1).forEach(o=>{const a=E[o.k];[o.i,o.i+1].forEach(i=>{const t=a[i];if(addStair(z,t[2],t[3],t[4],t[5]))keep.add(o.k+i)})})}
   if(!z.stairs.length)return;const added=[];
-  for(const k in E)E[k].forEach((t,i)=>{if(keep.has(k+i))return;const x2=t[2],y2=t[3];if(x2<0||y2<0||x2>=W||y2>=H)return;if(!free(x2,y2))return;const a=key(t[0],t[1]),b=key(x2,y2);{const sb=STAIR.get(b);if(sb&&sb.door)return}if(edgeBlk.has(a*100000+b))return;eBlk(a,b);added.push([a,b])});
+  for(const k in E)E[k].forEach((t,i)=>{if(keep.has(k+i))return;const x2=t[2],y2=t[3];if(!inb(x2,y2)||!free(x2,y2))return;const a=key(t[0],t[1]),b=key(x2,y2);{const sb=STAIR.get(b);if(sb&&sb.door)return}if(edgeBlk.has(a*100000+b))return;eBlk(a,b);added.push([a,b])});
   zEdges[zi]=added});
- // проверка: все места должны оставаться достижимыми; иначе зона остаётся открытой
- {let ref=-1;if(pz&&pz.door)ref=key(pz.door.x,pz.door.y);else{let best=0;for(let k=0;k<W*H;k++)if(!blocked[k]&&zAt[k]<0&&!seatSet.has(k)){const n=(()=>{const seen=new Uint8Array(W*H),q=[k];seen[k]=1;for(let i=0;i<q.length;i++){const c=q[i],x=c%W,y=(c/W)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=W||ny>=H)continue;const nk=key(nx,ny);if(seen[nk]||blocked[nk])continue;seen[nk]=1;q.push(nk)}}return q.length})();if(n>best){best=n;ref=k}if(best>W*H*.3)break}}
-  if(ref>=0){const rx=ref%W,ry=(ref/W)|0;const seats=bots.map(b=>b.seat).concat(bench,lounge,gameSlots);
-   seats.forEach(t=>{const zi=zAt[key(t.x,t.y)];if(zi<0||!zEdges[zi])return;if(!bfs(rx,ry,[[t.x,t.y]])){(window._zfail=window._zfail||[]).push([zones[zi].id,t.x,t.y,rx,ry]);zEdges[zi].forEach(([a,b])=>{edgeBlk.delete(a*100000+b);edgeBlk.delete(b*100000+a)});delete zEdges[zi];zones[zi].openEdges=1}})}}
+ // на ступени заходят только по оси лестницы (сбоку — нельзя), кроме соседней ступени той же лестницы
+ STAIR.forEach((st,k)=>{if(st.len<2)return;const x=k%W,y=(k/W)|0;[[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{if(dx===st.dx&&dy===st.dy)return;if(dx===-st.dx&&dy===-st.dy)return;const nx=x+dx,ny=y+dy;if(!inb(nx,ny))return;const nk=key(nx,ny),o=STAIR.get(nk);if(o&&o.z===st.z&&o.seg===st.seg)return;if(!edgeBlk.has(k*100000+nk))eBlk(k,nk)})});
+ const seatsAll=bots.map(b=>b.seat).concat(bench,lounge,gameSlots);
+ let ref=-1;if(pz&&pz.door)ref=key(pz.door.x,pz.door.y);else for(let k=0;k<W*H;k++)if(!blocked[k]&&zAt[k]<0){ref=k;break}
+ const check=()=>{const bad=[];if(ref<0)return bad;const rx=ref%W,ry=(ref/W)|0;seatsAll.forEach(t=>{if(!bfs(rx,ry,[[t.x,t.y]]))bad.push(t)});return bad};
+ check().forEach(t=>{const zi=zAt[key(t.x,t.y)];if(zi<0||!zEdges[zi])return;(window._zfail=window._zfail||[]).push(zones[zi].id);zEdges[zi].forEach(([a,b])=>{edgeBlk.delete(a*100000+b);edgeBlk.delete(b*100000+a)});delete zEdges[zi];zones[zi].openEdges=1});
+ // мостики: дерево кратчайших путей по коридорам между всеми концами (низ лестниц, места и стойки в коридорах)
+ const ends=[],okC=(x,y)=>inb(x,y)&&free(x,y)&&zAt[key(x,y)]<0&&!STAIR.has(key(x,y))&&!seatSet.has(key(x,y));
+ STAIR.forEach((st,k)=>{if(st.seg!==0)return;const x=k%W,y=(k/W)|0,nx=x-st.dx,ny=y-st.dy;if(okC(nx,ny))ends.push(key(nx,ny))});
+ STAIR.forEach((st,k)=>{if(st.len>1)return;const x=k%W,y=(k/W)|0;[[st.dy,st.dx],[-st.dy,-st.dx]].forEach(([dx,dy])=>{if(okC(x+dx,y+dy))ends.push(key(x+dx,y+dy))})});
+ seatsAll.forEach(t=>{const k=key(t.x,t.y);if(zAt[k]>=0||STAIR.has(k))return;ends.push(k);nbrs(t.x,t.y).slice(0,4).forEach(([x,y])=>{if(okC(x,y))ends.push(key(x,y))})});
+ bots.forEach(b=>{if(b.stand)b.stand.forEach(([x,y])=>{if(okC(x,y))ends.push(key(x,y))})});
+ zones.forEach(z=>{if(!z.openEdges)return;for(let x=z.x;x<z.x+z.w;x++){if(okC(x,z.y-1))ends.push(key(x,z.y-1));if(okC(x,z.y+z.h))ends.push(key(x,z.y+z.h))}for(let y=z.y;y<z.y+z.h;y++){if(okC(z.x-1,y))ends.push(key(z.x-1,y));if(okC(z.x+z.w,y))ends.push(key(z.x+z.w,y))}});
+ if(ref>=0&&zAt[ref]<0&&!STAIR.has(ref))ends.unshift(ref);
+ const isC=k=>!blocked[k]&&zAt[k]<0&&!STAIR.has(k),seen=new Int32Array(W*H).fill(-1),endSet=new Set(ends);
+ ends.forEach(e=>{if(seen[e]>=0)return;const q=[e];seen[e]=e;for(let i=0;i<q.length;i++){const c=q[i],x=c%W,y=(c/W)|0;if(c!==e&&seatSet.has(c))continue;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(!inb(nx,ny))continue;const nk=key(nx,ny);if(seen[nk]>=0||!isC(nk))continue;if(seatSet.has(nk)&&!endSet.has(nk))continue;seen[nk]=c;q.push(nk)}}
+  q.forEach(c=>{if(!endSet.has(c))return;let u=c;while(true){WALK[u]=1;if(u===e)break;u=seen[u]}})});
+ const walkBlk=[];for(let k=0;k<W*H;k++)if(isC(k)&&!WALK[k]){blocked[k]=1;walkBlk.push(k)}
+ {const bd=check();window._walkBad=bd.map(t=>[t.x,t.y]);}if(window._walkBad.length){walkBlk.forEach(k=>{blocked[k]=0;WALK[k]=1});window._walkOpen=1}
  computeCand();pickGamers();gameT=50000;assignPlaces(true);
 }
 function computeCand(){
@@ -361,11 +394,11 @@ function bfs(sx,sy,goals){const gs=new Set(goals.map(g=>key(g[0],g[1])));const p
  for(let i=0;i<q.length;i++){const k=q[i];if(gs.has(k)&&i>0){const path=[];let c=k;while(c!==q[0]){path.push([c%W,(c/W)|0]);c=prev[c]}return path.reverse()}
   const x=k%W,y=(k/W)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=W||ny>=H)continue;const nk=key(nx,ny);if(prev[nk]>=0)continue;
    if(blocked[nk])continue;if(edgeBlk.has(k*100000+nk))continue;if(seatSet.has(nk)&&!gs.has(nk))continue;prev[nk]=k;q.push(nk)}}return null}
-let GR=new Float32Array(1),STAIR=new Map();
+let GR=new Float32Array(1),STAIR=new Map(),WALK=new Uint8Array(1);
 // v16.2: высота пола в точке (платформа зоны / ступени / дорожка = 0)
 function groundAt(x,y){const tx=Math.floor(x/T),ty=Math.floor(y/T);if(tx<0||ty<0||tx>=W||ty>=H)return 0;const k=key(tx,ty),st=STAIR.get(k);
- if(st){let f=st.dy===1?(y-ty*T)/T:st.dy===-1?((ty+1)*T-y)/T:st.dx===1?(x-tx*T)/T:((tx+1)*T-x)/T;return st.h0+Math.max(0,Math.min(1,f))*(st.h-st.h0)}return GR[k]||0}
-const ZH={cabinet:20,asset20:14,hq:10,clean:15,sales:7,digital:13,personal:18,lab:9,lounge:6,prayer:17,games:11},ZH2=[8,15,11,18,7,14,10,17,12];
+ if(st){let f=st.dy===1?(y-ty*T)/T:st.dy===-1?((ty+1)*T-y)/T:st.dx===1?(x-tx*T)/T:((tx+1)*T-x)/T;f=(st.seg+Math.max(0,Math.min(1,f)))/st.len;return st.h0+f*(st.h-st.h0)}return GR[k]||0}
+const LV={cabinet:3,asset20:2,hq:1,clean:2,sales:0,digital:1,personal:3,lab:1,lounge:0,prayer:2,games:1},LV2=[1,2,0,3,1,2],ZH=Object.fromEntries(Object.entries(LV).map(([k,v])=>[k,6+7*v])),ZH2=LV2.map(v=>6+7*v);
 let edgeBlk=new Set();const eBlk=(a,b)=>{edgeBlk.add(a*100000+b);edgeBlk.add(b*100000+a)};
 const anchor=(tx,ty)=>({x:(tx+.5)*T,y:(ty+.85)*T});
 // ---------- визиты
@@ -634,7 +667,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());t.encoding=THREE.sRGBEncoding;
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=16.2';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=16.3';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 let pendMesh=null,pendE=null,tvTex=null;
@@ -642,21 +675,24 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
  paintFloor();if(floorTex)floorTex.dispose();floorTex=new THREE.CanvasTexture(floorCv);floorTex.encoding=THREE.sRGBEncoding;floorTex.magFilter=THREE.LinearFilter;floorTex.minFilter=THREE.LinearMipmapLinearFilter;floorTex.generateMipmaps=true;floorTex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  if(matTop)matTop.dispose();matTop=new THREE.MeshLambertMaterial({map:floorTex,vertexColors:true,side:THREE.DoubleSide});placeSun();
  const top=G(),side=G(),glass=G(),S=G(),E=G(),GL=G(),PD=G(),PE=G();
- quad(top,[[0,0,0],[W*T,0,0],[W*T,0,H*T],[0,0,H*T]],[1,1,1],[UV(0,0),UV(W*T,0),UV(W*T,H*T),UV(0,H*T)]);
  buildProps(top,S,E,GL,PD,PE);
  games.forEach(tb=>{const{X,Z,Wd,Dd,H}=gRect(tb);LIFT=groundAt(X+Wd/2,Z+Dd/2);box(top,side,X,Z,Wd,Dd,H,tb.t==='billiard'?'#5a3418':tb.t==='foos'?'#37474f':'#0d47a1',true);[[X+1,Z+1],[X+Wd-3,Z+1],[X+1,Z+Dd-3],[X+Wd-3,Z+Dd-3]].forEach(([a,b])=>bx(S,a,b,2,2,H,'#222'));if(tb.t==='pong')box(side,side,X+Wd/2-.5,Z-1,1,Dd+2,3,'#eceff1',false,H);LIFT=0});
  mkMesh(top,matTop);mkMesh(side,matSide);mkMesh(glass,matWall,2,true);const c=zoneById.cabinet;
- // v16.2: парящие платформы — у каждой зоны свой уровень, между ними ступени; стен вокруг офиса нет
- const pr=zoneById.prayer,PAL=[['#eef1f3','#c9d2d8'],['#e3eef6','#bccfdc'],['#e6eee0','#c3d2ba']];
- {const B=G(),BS=G();box(BS,BS,-6,-6,W*T+12,H*T+12,5.85,'#3f8794',false,-6);mkMesh(BS,matSide);
+ // v16.3: платформы — толстые блоки на разных этажах; между ними тёмная пустота, мостики и лестницы
+ const pr=zoneById.prayer,PAL=[['#eef1f3','#c3ccd3'],['#e3eef6','#a9c2d4'],['#e6eee0','#b5c8a9']],BOT=-14;
+ {const B=G(),BS=G();
   zones.forEach((z,i)=>{const hh=z.h3,x0=z.x*T,z0=z.y*T,x1=(z.x+z.w+(z.ext&&z.ext.e||0))*T,z1=(z.y+z.h)*T,[tc,sc]=PAL[i%3];
    quad(B,[[x0,hh,z0],[x1,hh,z0],[x1,hh,z1],[x0,hh,z1]],[1,1,1],[UV(x0,z0),UV(x1,z0),UV(x1,z1),UV(x0,z1)]);
-   const th=4.5,y0=hh-th;box(BS,BS,x0,z0,x1-x0,z1-z0,th-.05,sc,false,y0);
-   box(BS,BS,x0+1.5,z0+1.5,x1-x0-3,z1-z0-3,Math.max(0,y0-.2),'#2f6f7b',false,0)});
-  zones.forEach(z=>z.stairs.forEach(st=>{const n=Math.max(2,Math.round(z.h3/2.4)),x=st.x*T,y=st.y*T;
-   for(let i=0;i<n;i++){const hh=st.h0+(z.h3-st.h0)*(i+1)/n,a=i/n*T,b=T;
-    if(st.dy===1)box(BS,BS,x+1,y+a,T-2,b-a,hh,'#f6f7f8',false,0);else if(st.dy===-1)box(BS,BS,x+1,y,T-2,T-a,hh,'#f6f7f8',false,0);
-    else if(st.dx===1)box(BS,BS,x+a,y+1,b-a,T-2,hh,'#f6f7f8',false,0);else box(BS,BS,x,y+1,T-a,T-2,hh,'#f6f7f8',false,0)}}));
+   box(BS,BS,x0,z0,x1-x0,z1-z0,hh-.05-BOT,sc,false,BOT);bx(BS,x0-.3,z0-.3,x1-x0+.6,.9,1.1,'#ffffff',hh-1);bx(BS,x0-.3,z1-.6,x1-x0+.6,.9,1.1,'#ffffff',hh-1);bx(BS,x0-.3,z0-.3,.9,z1-z0+.6,1.1,'#ffffff',hh-1);bx(BS,x1-.6,z0-.3,.9,z1-z0+.6,1.1,'#ffffff',hh-1)});
+  // мостики на уровне 0
+  const wk=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&(WALK[key(x,y)]||STAIR.has(key(x,y)));
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!WALK[key(x,y)])continue;const il=wk(x-1,y)?0:2.5,ir=wk(x+1,y)?0:2.5,it=wk(x,y-1)?0:2.5,ib=wk(x,y+1)?0:2.5;
+   bx(BS,x*T+il,y*T+it,T-il-ir,T-it-ib,3,(x+y)%2?'#f2ede4':'#ebe5da',-3)}
+  // ступени
+  STAIR.forEach((st,k)=>{const x=(k%W)*T,y=((k/W)|0)*T,Lr=st.len*T,n=Math.max(2,Math.round((st.h-st.h0)/3)),s0=st.seg*T,s1=s0+T;
+   for(let i=0;i<n;i++){const a=i/n*Lr;if(a>=s1)continue;const u0=Math.max(a,s0)-s0,hh=st.h0+(st.h-st.h0)*(i+1)/n,dpt=T-u0,col=i%2?'#f7f8f9':'#eef1f3';
+    if(st.dy===1)box(BS,BS,x+1,y+u0,T-2,dpt,hh+3,col,false,-3);else if(st.dy===-1)box(BS,BS,x+1,y,T-2,dpt,hh+3,col,false,-3);
+    else if(st.dx===1)box(BS,BS,x+u0,y+1,dpt,T-2,hh+3,col,false,-3);else box(BS,BS,x,y+1,dpt,T-2,hh+3,col,false,-3)}});
   mkMesh(B,matTop);mkMesh(BS,matSide)}
  // ТВ с графиком — на отдельной стойке у северного края зоны
  const tvz=tvZone();if(tvz){const tvx=(tvz.x+tvz.w/2)*T,tz=tvz.y*T+2;LIFT=tvz.h3;tvTex=tvTex||tvTexture();
@@ -686,7 +722,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const MS=28,QP=qiblaPt(z),cxn=QP.x,czn=QP.y,wd=MS*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshLambertMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1+z.h3,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=16.2');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.encoding=THREE.sRGBEncoding;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=16.3');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.encoding=THREE.sRGBEncoding;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex,toneMapped:false}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2+z.h3,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false;boardTex.encoding=THREE.sRGBEncoding}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(z.x+z.w)*T+(z.ext.e?T/2-1.6:-2.6);
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide,toneMapped:false}));bx(S,ex+.6,(z.y+z.h/2)*T-bw/2-2.5,2,bw+5,WH,'#f3efe8');LIFT=0;bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2+z.h3,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -886,7 +922,7 @@ function praying(b){return b.place==='prayer'&&b.mode==='seat'&&Math.hypot(b.x-b
 function duaTick(dt){duaT-=dt;if(duaT>0)return;duaT=500;const b=bySlug[imamSlug];if(!b||!praying(b))return;const sp=curStep();if(!sp||sp.pose!=='dua')return;
  const key=namaz.id+namaz.g+'|'+Math.floor(performance.now()/6e5)+'|'+Math.floor(sp.t0);if(b.duaKey===key)return;b.duaKey=key;speech={b,t:DUA[0],until:performance.now()+15000}}
 // ---------- камера (орбита)
-const TILT3D=.72;
+const TILT3D=.96;const AZ3D=()=>LAY==='tall'?Math.PI/8:Math.PI/4;
 const _v=new THREE.Vector3(),_o=new THREE.Vector3(),_d=new THREE.Vector3();
 const vw=()=>innerWidth,vh=()=>innerHeight;
 function applyCamera(v){const t=Math.max(.0015,v.tilt),d=3000;camera.position.set(v.tx+d*Math.sin(t)*Math.sin(v.az),d*Math.cos(t),v.tz+d*Math.sin(t)*Math.cos(v.az));camera.up.set(0,1,0);camera.lookAt(v.tx,0,v.tz);
@@ -897,14 +933,14 @@ function baseView(){return viewT?{...viewT.to}:{...view}}
 function animTo(to,dur){viewT={from:{...view},to,t:performance.now(),dur:dur||650}}
 function freeRect(){const bh=(document.getElementById('bar').offsetHeight||52)+((document.getElementById('khatm')||{}).offsetHeight||0)+6;const r={x:6,y:84,w:vw()-12,h:vh()-84-bh-22};if(card.style.display==='block'){const c=card.getBoundingClientRect();if(c.left>vw()/3){r.w=c.left-12}else{r.h=c.top-r.y-6}}return r}
 function fitInto(x,y,w,h,maxS,inst,base){const f=freeRect();base=base||baseView();const tmp={...base,tx:x+w/2,tz:y+h/2,zoom:1};applyCamera(tmp);
- let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const[px,pz]of[[x,y],[x+w,y],[x,y+h],[x+w,y+h]])for(const hh of[0,20]){const[sx,sy]=w2s(px,pz,hh);a=Math.min(a,sx);b=Math.max(b,sx);c=Math.min(c,sy);d=Math.max(d,sy)}
+ let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const[px,pz]of[[x,y],[x+w,y],[x,y+h],[x+w,y+h]])for(const hh of[-14,50]){_v.set(px,hh,pz).project(camera);const sx=(_v.x+1)/2*vw(),sy=(1-_v.y)/2*vh();a=Math.min(a,sx);b=Math.max(b,sx);c=Math.min(c,sy);d=Math.max(d,sy)}
  const z=Math.max(.3,Math.min(maxS||6,f.w/(b-a),f.h/(d-c)));tmp.zoom=z;applyCamera(tmp);
  const shx=f.x+f.w/2-(vw()/2+((a+b)/2-vw()/2)*z),shy=f.y+f.h/2-(vh()/2+((c+d)/2-vh()/2)*z);const[ntx,ntz]=s2w(vw()/2-shx,vh()/2-shy);
  const to={...base,tx:ntx,tz:ntz,zoom:z};applyCamera(view);if(inst){view=to;viewT=null}else animTo(to)}
 function fitAll(inst,base){fitInto(0,0,W*T,H*T,6,inst,base)}
 function refit(base){if(sel)fitInto(sel.sit.x-80,sel.sit.y-60,160,90,4,false,base);else if(selZone&&card.style.display==='block')fitInto(selZone.x*T,selZone.y*T-8,selZone.w*T,selZone.h*T+8,4,false,base);else fitAll(false,base)}
 function rotate(k){const b=baseView();b.az+=k*Math.PI/4;refit(b)}
-function setTop(on){const b=baseView();if(on){b.tilt=0;b.az=0}else b.tilt=TILT3D;refit(b)}
+function setTop(on){const b=baseView();if(on){b.tilt=0;b.az=0}else{b.tilt=TILT3D;b.az=AZ3D()}refit(b)}
 function topBtn(){const b=document.getElementById('topv');const t=(viewT?viewT.to:view).tilt<.05;const s=t?'3D':'Сверху';if(b.textContent!==s){b.textContent=s;b.classList.toggle('on',t)}}
 // ---------- оверлей: подписи и значки поверх 3D
 function drawOverlay(){ctx=octx;octx.setTransform(DPR,0,0,DPR,0,0);octx.clearRect(0,0,vw(),vh());
@@ -947,7 +983,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='16.2';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='16.3';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
