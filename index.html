@@ -66,7 +66,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=15.6"></script>
+<script src="three.min.js?v=15.7"></script>
 <script>
 'use strict';
 const T=16,DPR=Math.min(window.devicePixelRatio||1,2),FS=2;
@@ -90,8 +90,8 @@ function prayerTimes(date){const lat=51.17,lng=71.45,tz=5,R=Math.PI/180,sn=x=>Ma
  const night=24-(ss-sr),por=15/60*night;if(isNaN(f)||sr-f>por)f=sr-por;if(isNaN(is)||is-ss>por)is=ss+por;
  const adj=h=>h+tz-lng/15,mins=[adj(f),adj(dh)+5/60,adj(as)+5/60,adj(ss)+5/60,adj(is)];
  return NAMAZ.map((n,i)=>({id:n[0],name:n[1],t:new Date(Date.UTC(y,m-1,d)+(Math.round(mins[i]*60)-tz*60)*6e4)}))}
-let namazT=0;const QS=new URLSearchParams(location.search),NAMAZ_SIM=QS.get('namaz'),NAMAZ_G=+(QS.get('g')||0),SIM_T0=performance.now()-(+(QS.get('t')||0))*1000,SIM_FRI=QS.get('fri')==='1',GROUP_N=9;
-// все боты совершают каждый намаз полностью по ханафитскому мазхабу: группы по 9 (имам на коврике + 8 за ним), порядок и имамы — детерминированно от даты и намаза
+let namazT=0;const QS=new URLSearchParams(location.search),NAMAZ_SIM=QS.get('namaz'),NAMAZ_G=+(QS.get('g')||0),SIM_T0=performance.now()-(+(QS.get('t')||0))*1000,SIM_FRI=QS.get('fri')==='1',GROUP_N=11;
+// все боты совершают каждый намаз полностью по ханафитскому мазхабу: группы по 11 (имам на своём коврике + полный ряд из 10 за ним), порядок и имамы — детерминированно от даты и намаза
 function prayerParts(id,fri){if(id==='fajr')return[['sunnah',2,'сунна (муаккада)'],['fard',2,'фард']];
  if(id==='dhuhr')return fri?[['sunnah',4,'сунна (перед джума)'],['fard',2,'фард джума (джамаат)'],['sunnah',4,'сунна (после джума)'],['sunnah',2,'сунна']]:[['sunnah',4,'сунна (муаккада)'],['fard',4,'фард'],['sunnah',2,'сунна (муаккада)']];
  if(id==='asr')return[['sunnah',4,'сунна (гайру муаккада)'],['fard',4,'фард']];
@@ -294,21 +294,28 @@ function namazTick(){const n=namazNow(),k=n?n.id+n.g:'',was=namaz?namaz.id+namaz
 function qiblaPt(z){return{x:z.x*T+14,y:z.y*T+14}} // центр ниши-михраба (та же точка, где стоит 3D-михраб)
 function rugPt(z){return{x:z.x*T+27,y:z.y*T+27}}
 const PPOS={};
+// v15.7: у каждого свой жайнамаз. Имам — на большом коврике у михраба, за ним ряды по 10 ковриков перпендикулярно направлению на киблу, каждый коврик повёрнут к михрабу
+const ROW_N=10,RUG_GAP=13,ROW_GAP=25;
 function prayPos(z){const key=[z.x,z.y,z.w,z.h].join();if(PPOS[key])return PPOS[key];
  const Q=qiblaPt(z),R0=rugPt(z),L=Math.hypot(R0.x-Q.x,R0.y-Q.y),u={x:(R0.x-Q.x)/L,y:(R0.y-Q.y)/L},r={x:-u.y,y:u.x};
- const x0=z.x*T+7,x1=(z.x+z.w)*T-7,y0=z.y*T+12,y1=(z.y+z.h)*T-2,inb=p=>p.x>=x0&&p.x<=x1&&p.y>=y0&&p.y<=y1;
- let out=null;for(let sc=1;sc>.5&&!out;sc-=.06){const pts=[{x:Q.x+u.x*22,y:Q.y+u.y*22,row:0}];
-  for(let k=1;k<8&&pts.length<GROUP_N;k++){const d=22+k*20*sc,c={x:Q.x+u.x*d,y:Q.y+u.y*d};const row=[];
-   for(let l=0;l<=7;l++)for(const sg of l?[1,-1]:[1]){const p={x:c.x+r.x*l*15*sc*sg,y:c.y+r.y*l*15*sc*sg,row:k};if(inb(p))row.push(p)}
-   row.forEach(p=>{if(pts.length<GROUP_N)pts.push(p)})}
-  if(pts.length>=GROUP_N)out=pts}
- return PPOS[key]=out||[{x:Q.x+u.x*22,y:Q.y+u.y*22,row:0}]}
+ const x0=z.x*T+12,x1=(z.x+z.w)*T-12,y0=z.y*T+14,y1=(z.y+z.h)*T-10;
+ const seg=d=>{const c={x:Q.x+u.x*d,y:Q.y+u.y*d};let lo=-1e9,hi=1e9;[[r.x,c.x,x0,x1],[r.y,c.y,y0,y1]].forEach(([k,v,a,b])=>{if(Math.abs(k)<1e-6){if(v<a||v>b){lo=1;hi=0}return}let t1=(a-v)/k,t2=(b-v)/k;if(t1>t2)[t1,t2]=[t2,t1];lo=Math.max(lo,t1);hi=Math.min(hi,t2)});return{c,lo,hi,len:hi-lo}};
+ const imD=26,im={x:Q.x+u.x*imD,y:Q.y+u.y*imD,row:0,imam:1};const rows=[];
+ let d=imD+ROW_GAP,need=(ROW_N-1)*RUG_GAP;while(d<imD+200){const sg=seg(d);if(sg.len>=need)break;d+=1}
+ for(let k=0;k<8;k++,d+=ROW_GAP){const sg=seg(d);if(sg.len<need)break;const tc=(sg.lo+sg.hi)/2,row=[];
+  for(let i=0;i<ROW_N;i++){const t=tc+(i-(ROW_N-1)/2)*RUG_GAP;row.push({x:sg.c.x+r.x*t,y:sg.c.y+r.y*t,row:k+1,i})}rows.push(row)}
+ if(!rows.length){const sg=seg(imD+ROW_GAP),n=Math.max(1,Math.floor(Math.max(0,sg.len)/RUG_GAP)+1),tc=(sg.lo+sg.hi)/2;rows.push([...Array(n)].map((_,i)=>({x:sg.c.x+r.x*(tc+(i-(n-1)/2)*RUG_GAP),y:sg.c.y+r.y*(tc+(i-(n-1)/2)*RUG_GAP),row:1,i})))}
+ // порядок заполнения: имам, затем каждый ряд от центра к краям
+ const slots=[im];rows.forEach(row=>{const m=(row.length-1)/2;row.slice().sort((a,b)=>Math.abs(a.i-m)-Math.abs(b.i-m)||a.i-b.i).forEach(p=>slots.push(p))});
+ // бот стоит на задней половине своего коврика; все коврики параллельны оси «ряды → михраб» (как в мечети), имам — точно на михраб
+ slots.forEach(p=>{p.dir={x:-u.x,y:-u.y};p.sx=p.x-p.dir.x*(p.imam?5:3);p.sy=p.y-p.dir.y*(p.imam?5:3)});
+ const out=slots;out.rows=rows;out.im=im;return PPOS[key]=out}
 function desired(b){if(prayMembers.has(b.slug)&&zoneById.prayer)return 'prayer';if(b.boss)return 'desk';if(waitOn(b))return 'bench';if(gamers.has(b.slug)&&canPlay(b))return 'games';if(b.st==='idle')return 'lounge';return 'desk'}
 function assignPlaces(instant){const used={bench:new Set(),lounge:new Set(),games:new Set(),prayer:new Set()};
  bots.forEach(b=>{if(b.place!=='desk'&&desired(b)===b.place)used[b.place].add(b.slot)});
  bots.forEach(b=>{const d=desired(b);if(d===b.place&&(d==='games'?b.slot===gamers.get(b.slug):d==='prayer'?b.slot===prayMembers.get(b.slug):true))return;let place='desk',slot=null,seat=b.deskSeat,sit=b.deskSit;
   if(d==='games'){const i=gamers.get(b.slug),q=gameSlots[i];place='games';slot=i;seat={x:q.x,y:q.y};sit=anchor(q.x,q.y)}
-  else if(d==='prayer'){const z=zoneById.prayer,i=prayMembers.get(b.slug),pp=prayPos(z),q=pp[i%pp.length];place='prayer';slot=i;seat={x:z.door.x,y:z.door.y};sit={x:q.x,y:q.y}}
+  else if(d==='prayer'){const z=zoneById.prayer,i=prayMembers.get(b.slug),pp=prayPos(z),q=pp[i%pp.length];place='prayer';slot=i;seat={x:z.door.x,y:z.door.y};sit={x:q.sx,y:q.sy}}
   else if(d!=='desk'){const arr=d==='bench'?bench:lounge;const i=arr.findIndex((t,k)=>!used[d].has(k));if(i>=0){used[d].add(i);place=d;slot=i;seat={x:arr[i].x,y:arr[i].y};sit=anchor(arr[i].x,arr[i].y)}}
   if(place===b.place&&slot===b.slot)return;const from=b.seat;b.wasPrayer=b.place==='prayer';b.place=place;b.slot=slot;b.seat=seat;b.sit=sit;
   if(instant){b.x=sit.x;b.y=sit.y;b.mode='seat';return}
@@ -533,12 +540,15 @@ function drawGames(){const lw=Math.max(1,Math.min(3,view.zoom*1.1));
    ln([X+Wd/2,Z,H],[X+Wd/2,Z+Dd,H],'#eceff1',lw);ln([X+Wd/2,Z,H+3],[X+Wd/2,Z+Dd,H+3],'#eceff1',lw);
    dot(ax-(fw?2:-2),az,H+6,2.2,'#d32f2f');dot(cx+(fw?2:-2),cz,H+6,2.2,'#d32f2f');dot(bx,bz,hgt,1.3,'#fff59d')}})}
 // джай-намаз: по диагонали, головой к углу с михрабом
-function drawRug(z){ctx.save();ctx.translate(z.x*T+27,z.y*T+27);ctx.rotate(-Math.PI/4);const w=17,l=30;
- R(-w/2,-l/2,w,l,'#6d1a26');R(-w/2+1.2,-l/2+1.2,w-2.4,l-2.4,'#b03a4e');R(-w/2+2.8,-l/2+2.8,w-5.6,l-5.6,'#7d1f2e');
- ctx.strokeStyle='#e2bb5c';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-5,-l/2+13);ctx.lineTo(-5,-l/2+7);ctx.quadraticCurveTo(-5,-l/2+4,0,-l/2+3.2);ctx.quadraticCurveTo(5,-l/2+4,5,-l/2+7);ctx.lineTo(5,-l/2+13);ctx.stroke();
- R(-4,l/2-8,8,1,'#e2bb5c');R(-4,l/2-6,8,1,'#e2bb5c');
- for(let i=-w/2+1;i<w/2;i+=2){R(i,-l/2-1.6,.8,1.6,'#f3ead6');R(i,l/2,.8,1.6,'#f3ead6')}
- ctx.restore()}
+const RUGC=[['#6d1a26','#b03a4e','#7d1f2e'],['#1d4d3a','#3f8f6b','#245e47'],['#1f3b6d','#4a6fb0','#27477f'],['#5a3d12','#b5832f','#7a5418']];
+function rugAt(x,y,dir,w,l,ci,big){const th=Math.atan2(dir.x,-dir.y),C=RUGC[ci%RUGC.length];ctx.save();ctx.translate(x,y);ctx.rotate(th);
+ R(-w/2,-l/2,w,l,C[0]);R(-w/2+1,-l/2+1,w-2,l-2,C[1]);R(-w/2+2.2,-l/2+2.2,w-4.4,l-4.4,C[2]);
+ const a=w/2-(big?3.5:2.6),top=-l/2+(big?3.2:2.6),h=big?10:6;ctx.strokeStyle='#e2bb5c';ctx.lineWidth=big?1:.8;ctx.beginPath();ctx.moveTo(-a,top+h);ctx.lineTo(-a,top+a);ctx.quadraticCurveTo(-a,top,0,top);ctx.quadraticCurveTo(a,top,a,top+a);ctx.lineTo(a,top+h);ctx.stroke();
+ R(-a+1,l/2-(big?8:5),2*a-2,.8,'#e2bb5c');if(big)R(-4,l/2-6,8,1,'#e2bb5c');
+ for(let i=-w/2+1;i<w/2;i+=2){R(i,-l/2-1.4,.7,1.4,'#f3ead6');R(i,l/2,.7,1.4,'#f3ead6')}ctx.restore()}
+function drawRug(z){const pp=prayPos(z);
+ pp.rows.forEach((row,k)=>row.forEach((p,i)=>rugAt(p.x,p.y,p.dir||{x:-.7071,y:-.7071},11,19,(k+1+(i%2?2:0)),false)));
+ const im=pp.im;rugAt(im.x,im.y,im.dir,17,30,0,true)}
 function paintFloor(){floorCv.width=W*T*FS;floorCv.height=H*T*FS;ctx=fctx;fctx.setTransform(FS,0,0,FS,0,0);fctx.imageSmoothingEnabled=false;
  drawWorld();bots.forEach(b=>{if(b.kind==='desk')paintDesk(b)});decor.forEach(d=>drawDecor(d));const c=zoneById.cabinet;if(c)paintBig(c);const a=zoneById.asset20;if(a)drawTable(a);const pz=zoneById.prayer;if(pz)drawRug(pz);games.forEach(paintGame);ctx=octx}
 const WH=46,DOORH=33; // высота стен ~3 м, двери ~2.1 м (бот ~1.75 м = 27)
@@ -550,7 +560,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.6';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=15.7';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.material&&m.material.map&&m.material!==matTop){m.material.map.dispose();m.material.dispose()}});meshes=[];if(portrait)scene.remove(portrait.g);wallSegs=[];portrait=null;
@@ -607,7 +617,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const S=28,QP=qiblaPt(z),cxn=QP.x,czn=QP.y,wd=S*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshBasicMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.6');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=15.7');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(sd.e?(z.x+z.w)*T:W*T-T*.6)-.6;
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide}));bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -642,7 +652,7 @@ function updateSprites(){bots.forEach(b=>{const s=spr.get(b.slug);if(!s)return;c
  const pray=false;const i=bust?3:(moving?((animTime/160|0)%2)+1:play?((animTime/(b.slot%2?300:340)|0)%2)+1:0);if(s.cur!==i){s.obj.material.map=s.tex[i];s.obj.material.needsUpdate=true;s.cur=i}
  s.obj.scale.set(16,bust?21:27,1);s.obj.position.set(b.x+(play?Math.sin(animTime/380+b.slot)*1.2:0),pray?1:botH(b),b.y)})}
 // направление взгляда: строго на точку киблы (михраб), считается из координат; салям — поворот головы вправо/влево от этого направления
-function qiblaDir(b){const z=zoneById.prayer,Q=qiblaPt(z),dx=Q.x-b.x,dy=Q.y-b.y,L=Math.hypot(dx,dy)||1;return{x:dx/L,y:dy/L}}
+function qiblaDir(b){const z=zoneById.prayer,Q=qiblaPt(z),R0=rugPt(z),dx=Q.x-R0.x,dy=Q.y-R0.y,L=Math.hypot(dx,dy)||1;return{x:dx/L,y:dy/L}} // направление киблы: ось от рядов к михрабу (все стоят параллельно, лицом к углу «Аллах»)
 function facePose(b,pose){const fam=POSE_FAM[pose]||'qiyam';let f=qiblaDir(b);
  if(pose==='salamR'||pose==='salamL'){const sg=pose==='salamR'?1:-1,r={x:-f.y*sg,y:f.x*sg},m={x:f.x*.35+r.x,y:f.y*.35+r.y},L=Math.hypot(m.x,m.y);f={x:m.x/L,y:m.y/L}}
  const[ax,ay]=w2s(b.x,b.y,0),[bx,by]=w2s(b.x+f.x*20,b.y+f.y*20,0),phi=Math.atan2(-(by-ay),bx-ax),c=Math.cos(phi),sn=Math.sin(phi);
@@ -715,7 +725,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='15.6';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='15.7';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
@@ -741,7 +751,7 @@ function openZone(z){sel=null;selZone=z;viewIdx=zones.indexOf(z);setWhere();
  if(z.kind==='prayer'){showCard(`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.name)}</h2><div class="sub">Тихая комната для намаза</div><div class="row">Джай-намаз постелен по диагонали и смотрит в угол, где в стене ниша-михраб с надписью «Аллах» (الله).</div>${namazCard()}<button class="back">Вернуться</button>`);card.querySelector('.back').onclick=goAll;fitInto(z.x*T-8,z.y*T-8,z.w*T+16,z.h*T+16,5);return}
  const zb=z.kind==='lounge'?bots.filter(b=>b.place==='lounge'):z.kind==='games'?bots.filter(b=>b.place==='games'):z.bots;
  const n=zb.length,busy=zb.filter(b=>b.st==='busy').length,today=zb.filter(b=>b.st==='busy'||b.st==='today').length,desk=zb.filter(b=>b.place==='desk'&&b.mode==='seat').length,rest=zb.filter(b=>b.place==='lounge').length,wt=zb.filter(b=>b.place==='bench').length;
- let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='games'?`Бильярд, настольный футбол и пинг-понг. ${n?`Сейчас играют: ${n}.`:'Сейчас никто не играет: все свободные боты читают Коран.'}`:z.kind==='lounge'?`Здесь сидят боты, неактивные больше 7 дней, и читают Коран: ${n}.`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
+ let h=`<h2><span class="dot" style="background:${z.color}"></span>${esc(z.kind==='cabinet'?'Кабинет директора':z.name)}</h2><div class="sub">${z.kind==='games'?`Настольный футбол и пинг-понг. ${n?`Сейчас играют: ${n}.`:'Сейчас никто не играет: все свободные боты читают Коран.'}`:z.kind==='lounge'?`Здесь сидят боты, неактивные больше 7 дней, и читают Коран: ${n}.`:`${n} ${plural(n,'бот','бота','ботов')} • ${desk} за столом • ${busy} ${plural(busy,'занят','заняты','заняты')} сейчас • ${today} активны сегодня${rest?` • ${rest} в зоне отдыха`:''}${wt?` • ${wt} ждут тебя`:''}`}</div>`;
  if(z.id==='asset20'){const g=(D.groups||[]).find(g=>g.slug==='asset20');h+=`<div class="row">Общий чат зон. Здесь сидят Дух, Тело и Бизнес; Директор подходит к столу за сводками.</div>`;if(g)h+=`<div class="row"><span class="k">Чат активен:</span> ${fmtAgo(g.act.last)} · ${g.act.d1} сообщ. за сутки · ${g.act.d7} за 7 дней</div>`}
  h+='<div class="list">';zb.slice().sort((a,b)=>(b.act.last||0)-(a.act.last||0)).forEach(b=>{h+=`<div data-s="${b.slug}"><span><span class="dot" style="background:${ST[b.st][0]};margin-right:8px"></span>${esc(b.name)}${b.test?' <span class="tag t">тест</span>':''}</span><span class="k">${fmtAgo(b.act.last)}</span></div>`});
  h+='</div><button class="back">Вернуться</button>';showCard(h);card.querySelector('.back').onclick=goAll;fitInto(z.x*T,z.y*T-8,z.w*T,z.h*T+8,4)}
