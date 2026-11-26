@@ -66,7 +66,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=16.6"></script>
+<script src="three.min.js?v=16.7"></script>
 <script>
 'use strict';
 THREE.ColorManagement.legacyMode=false; // v16: цвета в sRGB → линейные, честное освещение
@@ -693,7 +693,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());t.encoding=THREE.sRGBEncoding;
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=16.6';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=16.7';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 let pendMesh=null,pendE=null,tvTex=null;
@@ -752,7 +752,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const MS=28,QP=qiblaPt(z),cxn=QP.x,czn=QP.y,wd=MS*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshLambertMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1+z.h3,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=16.6');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.encoding=THREE.sRGBEncoding;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=16.7');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.encoding=THREE.sRGBEncoding;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex,toneMapped:false}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2+z.h3,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false;boardTex.encoding=THREE.sRGBEncoding}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(z.x+z.w)*T+(z.ext.e?T/2-1.6:-2.6);
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide,toneMapped:false}));bx(S,ex+.6,(z.y+z.h/2)*T-bw/2-2.5,2,bw+5,WH,'#f3efe8');LIFT=0;bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2+z.h3,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -845,7 +845,7 @@ const CG={};function cg(){if(CG.ok)return CG;CG.ok=1;
  CG.eye=new THREE.SphereGeometry(.42,8,6);CG.up=new THREE.CapsuleGeometry(1.02,2.2,3,8);CG.fore=new THREE.CapsuleGeometry(.9,2.1,3,8);CG.hand=new THREE.SphereGeometry(1.1,10,8);
  CG.thigh=new THREE.CapsuleGeometry(1.42,2.6,3,10);CG.shin=new THREE.CapsuleGeometry(1.2,2.8,3,10);CG.shoe=new THREE.BoxGeometry(2.4,1.3,4);CG.box=new THREE.BoxGeometry(1,1,1);
  CG.cyl=new THREE.CylinderGeometry(1,1,1,14);CG.sph=new THREE.SphereGeometry(1,10,8);CG.cone=new THREE.ConeGeometry(1,1,6);CG.beard=new THREE.SphereGeometry(3.12,16,8,Math.PI*.15,Math.PI*.7,1.75,1.0);
- CG.hcap=new THREE.SphereGeometry(3.45,20,10,0,Math.PI*2,0,1.2);CG.hwrap=new THREE.SphereGeometry(3.48,20,12,Math.PI/2+.8,Math.PI*2-1.6,.95,1.95);CG.hdrape=new THREE.CylinderGeometry(3.05,4.7,3.8,18,1,true);CG.skirt=new THREE.CylinderGeometry(3.5,4.9,1,18,1,true);return CG}
+ CG.hcap=new THREE.SphereGeometry(3.45,20,10,0,Math.PI*2,0,1.2);CG.hwrap=new THREE.SphereGeometry(3.48,20,12,Math.PI/2+.8,Math.PI*2-1.6,.95,1.95);CG.hdrape=new THREE.CylinderGeometry(3.05,4.7,3.8,18,1,true);CG.robeU=new THREE.CylinderGeometry(3.45,3.75,5.2,18);CG.robeK=new THREE.SphereGeometry(3.75,18,12);CG.robeL=new THREE.CylinderGeometry(3.75,4.25,4.9,18);return CG}
 const MX=(x,y,z,rx=0,ry=0,rz=0,sx=1,sy=1,sz=1)=>new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(sx,sy,sz));
 function mergeParts(parts){const pos=[],nor=[],col=[],c=new THREE.Color();
  parts.forEach(([geo,hex,m])=>{const g=geo.index?geo.toNonIndexed():geo.clone();if(m)g.applyMatrix4(m);c.set(hex);const p=g.attributes.position.array,n=g.attributes.normal.array;for(let i=0;i<p.length;i++){pos.push(p[i]);nor.push(n[i])}for(let i=0;i<p.length/3;i++)col.push(c.r,c.g,c.b);g.dispose()});
@@ -884,7 +884,9 @@ function makeChar(b){const C=cg(),lk=b.look||{},h=hsh(b.slug),skin=SK[h%4],hair=
   modest.push(mk([[C.hcap,hj,MX(0,3.6,0)],[C.hwrap,hj,MX(0,3.6,0)],[C.hdrape,hj,MX(0,.1,0)]],head));
   modest.push(mk([[C.torso,ab,MX(0,4.5,0,0,0,0,1.27,1.05,.86)]],torso));
   arms.forEach(a=>{modest.push(mk([[C.up,ab,MX(0,-1.95,0,0,0,0,1.14,1.03,1.14)]],a.sh));modest.push(mk([[C.fore,ab,MX(0,-1.45,0,0,0,0,1.14,1.02,1.14)]],a.el))});
-  skirt=mk([[C.skirt,ab,null]],root);modest.push(skirt);modest.forEach(m=>m.visible=false)}
+  // v16.7: платье в пол — верх идёт за бёдрами (средний угол), низ за голенями: ноги закрыты до щиколоток в любой позе (кыям, руку, суджуд, сидение)
+  const ru=new THREE.Group();ru.position.set(0,-.4,0);hips.add(ru);modest.push(mk([[C.robeU,ab,MX(0,-2.3,0,0,0,0,1,1,.78)],[C.robeK,ab,MX(0,-4.8,0,0,0,0,1,.9,.78)],[C.pelvis,ab,MX(0,.35,0,0,0,Math.PI/2,1.12,1.18,.98)]],ru));
+  const rl=new THREE.Group();rl.position.y=-4.8;ru.add(rl);modest.push(mk([[C.robeL,ab,MX(0,-2.4,0,0,0,0,1,1,.8)]],rl));skirt={u:ru,l:rl};modest.forEach(m=>m.visible=false)}
  return{obj:root,root,hips,torso,head,arms,legs,geos,cur:null,yaw:0,hairM,modest,skirt}}
 function shade2(hex,k){const c=new THREE.Color(hex);c.multiplyScalar(k);return c}
 function buildSprites(){spr.forEach(s=>{scene.remove(s.root);s.geos.forEach(g=>g.dispose())});spr.clear();
@@ -947,7 +949,7 @@ function updateSprites(){const now=performance.now(),dt=Math.min(60,_ut?now-_ut:
   {const gy=groundAt(b.x,b.y);b._py=b._py==null||Math.abs(gy-b._py)>20?gy:b._py+(gy-b._py)*Math.min(1,dt/70)}s.root.position.set(b._rx,b._py,b._ry);s.root.rotation.y=s.yaw;s.hips.position.y=cur.hy+cur.bob;s.torso.rotation.x=cur.tp;s.head.rotation.set(cur.hp,cur.hw,0);
   s.arms.forEach(a=>{const L=a.sg>0;a.sh.rotation.set(L?cur.shL:cur.shR,(L?-1:1)*cur.sy,(L?1:-1)*cur.sz);a.el.rotation.x=L?cur.elL:cur.elR});
   s.legs.forEach((g,i)=>{g.hj.rotation.x=i===0?cur.thL:cur.thR;g.kn.rotation.x=i===0?cur.knL:cur.knR});
-  if(s.modest&&s.modest.length){if(b.place==='prayer')b.covered=true;else if(b.covered&&b.mode==='seat'&&ds<3)b.covered=false;const cv=!!b.covered;if(s.hairM)s.hairM.visible=!cv;s.modest.forEach(m=>m.visible=cv);if(cv&&s.skirt){const top=Math.max(1.5,cur.hy+cur.bob+.6);s.skirt.position.y=.3+(top-.3)/2;s.skirt.scale.y=top-.3}}
+  if(s.modest&&s.modest.length){if(b.place==='prayer')b.covered=true;else if(b.covered&&b.mode==='seat'&&ds<3)b.covered=false;const cv=!!b.covered;if(s.hairM)s.hairM.visible=!cv;s.modest.forEach(m=>m.visible=cv);if(cv&&s.skirt){s.skirt.u.rotation.x=(cur.thL+cur.thR)/2;s.skirt.l.rotation.x=(cur.knL+cur.knR)/2}}
   s.root.updateMatrixWorld(true);s.head.getWorldPosition(_wv);b._hh=_wv.y+7;b.pose3=pose});}
 // направление взгляда: строго на точку киблы (михраб), считается из координат; салям — поворот головы вправо/влево от этого направления
 function qiblaDir(b){const z=zoneById.prayer,Q=qiblaPt(z),R0=rugPt(z),dx=Q.x-R0.x,dy=Q.y-R0.y,L=Math.hypot(dx,dy)||1;return{x:dx/L,y:dy/L}} // направление киблы: ось от рядов к михрабу (все стоят параллельно, лицом к углу «Аллах»)
@@ -1024,7 +1026,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='16.6';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='16.7';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
@@ -1119,7 +1121,7 @@ function drawSpeech(){if(!speech)return;const b=speech.b;const[hx,hy]=w2s(RX(b),
 // звучит только при включённом звуке (кнопка 🔇/🔊, выбор запоминается); облачка с текстом видны и без звука; одновременно — только одна запись, фон приглушается
 const EV={el:null,key:'',on:false,unlocked:false,log:[],want:null};window.__ev=EV;
 const evExt=(()=>{const a=document.createElement('audio');return a.canPlayType('audio/ogg; codecs="opus"')?'.ogg':'.m4a'})();
-function evSrc(c){return 'audio/'+c+evExt+'?v=16.6'}
+function evSrc(c){return 'audio/'+c+evExt+'?v=16.7'}
 function evInit(){if(EV.el)return EV.el;const el=new Audio();el.preload='auto';el.addEventListener('loadedmetadata',()=>{const w=evWant();if(w&&el.src.indexOf('/'+w.c+'.')>=0)try{el.currentTime=Math.max(0,w.off)}catch(e){}});
  el.addEventListener('error',()=>EV.log.push({err:el.src,t:Date.now()}));EV.el=el;return el}
 function evWant(){if(!namaz)return null;const sp=curStep();if(!sp)return null;const c=sp.k==='adhan'?(namaz.g===0?'adhan':null):sp.ev==='iqamah'?'iqamah':sp.aud||null;if(!c)return null;
