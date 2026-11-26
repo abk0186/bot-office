@@ -66,7 +66,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 <div id="khatm" role="button" aria-label="Хатм Коран"></div>
 <div id="card"></div>
 <div id="err"></div>
-<script src="three.min.js?v=16.4"></script>
+<script src="three.min.js?v=16.5"></script>
 <script>
 'use strict';
 THREE.ColorManagement.legacyMode=false; // v16: цвета в sRGB → линейные, честное освещение
@@ -630,7 +630,7 @@ function brickBox(g,x,z,w,d,h,y0=0){const x1=x+w,z1=z+d,y1=y0+h,U=32,V=24,cs=[1,
  quad(g,[[x1,y0,z],[x1,y0,z1],[x1,y1,z1],[x1,y1,z]],cs,[[z/U,y0/V],[z1/U,y0/V],[z1/U,y1/V],[z/U,y1/V]]);
  quad(g,[[x,y0,z],[x,y0,z1],[x,y1,z1],[x,y1,z]],cs,[[z/U,y0/V],[z1/U,y0/V],[z1/U,y1/V],[z/U,y1/V]])}
 // стеклянная стена: прозрачное стекло + тонкая чёрная рама (стойки на каждой клетке)
-function glassWall(S,GL,a,b,axis,c0,h,doorA,doorB){const F='#d3dce1',t=.9;const P=(u,y)=>axis==='x'?[u,y,c0]:[c0,y,u];
+function glassWall(S,GL,a,b,axis,c0,h,doorA,doorB){return; /* v16.5: стеклянные стены убраны */const F='#d3dce1',t=.9;const P=(u,y)=>axis==='x'?[u,y,c0]:[c0,y,u];
  const inDoor=u=>doorA!=null&&u>doorA+.5&&u<doorB-.5;
  if(doorA!=null){if(doorA>a)bar(S,P(a,0),P(doorA,0),t*1.3,F);if(doorB<b)bar(S,P(doorB,0),P(b,0),t*1.3,F)}else bar(S,P(a,0),P(b,0),t*1.3,F);bar(S,P(a,h),P(b,h),t*1.2,F);
  for(let u=a;u<=b+.01;u+=T)if(!inDoor(u))bar(S,P(u,0),P(u,h),t,F);
@@ -684,7 +684,7 @@ function portraitTex(){const c=document.createElement('canvas');c.width=288;c.he
  const frame=()=>{const r=(x,y,w,h,f)=>{k.fillStyle=f;k.fillRect(x,y,w,h)};r(0,0,288,360,'#7a5c00');r(4,4,280,352,'#d4a017');r(10,10,268,340,'#ffd54f');r(14,14,260,332,'#b8860b');r(17,17,254,326,'#5c4500')};
  frame();k.fillStyle='#cfd6e0';k.fillRect(20,20,248,320);
  const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearMipmapLinearFilter;t.generateMipmaps=true;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());t.encoding=THREE.sRGBEncoding;
- const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=16.4';
+ const im=new Image();im.onload=()=>{k.imageSmoothingEnabled=true;k.imageSmoothingQuality='high';k.drawImage(im,20,20,248,320);t.needsUpdate=true};im.src='portrait.jpg?v=16.5';
  return t}
 function canvasTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.NearestFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t}
 let pendMesh=null,pendE=null,tvTex=null;
@@ -743,7 +743,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
   // михраб: ниша по диагонали в углу, лицом к коврику
   const MS=28,QP=qiblaPt(z),cxn=QP.x,czn=QP.y,wd=MS*Math.SQRT2,ht=wd*416/512;
   const back=new THREE.Mesh(new THREE.BoxGeometry(wd+2,ht+2,3),new THREE.MeshLambertMaterial({color:'#d6c9ab'}));back.rotation.y=Math.PI/4;back.position.set(cxn-1.2,ht/2+1+z.h3,czn-1.2);scene.add(back);meshes.push(back);
-  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=16.4');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.encoding=THREE.sRGBEncoding;
+  const tex=new THREE.TextureLoader().load('mihrab.jpg?v=16.5');tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;tex.encoding=THREE.sRGBEncoding;
   const pl=new THREE.Mesh(new THREE.PlaneGeometry(wd,ht),new THREE.MeshBasicMaterial({map:tex,toneMapped:false}));pl.rotation.y=Math.PI/4;pl.position.set(cxn+.2,ht/2+z.h3,czn+.2);scene.add(pl);meshes.push(pl);
   boardKey='';if(!boardTex){boardTex=new THREE.CanvasTexture(boardCv);boardTex.minFilter=THREE.LinearFilter;boardTex.generateMipmaps=false;boardTex.encoding=THREE.sRGBEncoding}paintBoard();const bw=Math.min(52,z.h*T-12),bh=bw*320/512,ex=(z.x+z.w)*T+(z.ext.e?T/2-1.6:-2.6);
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),new THREE.MeshBasicMaterial({map:boardTex,side:THREE.DoubleSide,toneMapped:false}));bx(S,ex+.6,(z.y+z.h/2)*T-bw/2-2.5,2,bw+5,WH,'#f3efe8');LIFT=0;bd.rotation.y=-Math.PI/2;bd.position.set(ex,WH-5-bh/2+z.h3,(z.y+z.h/2)*T);scene.add(bd);bd.userData.keep=1;meshes.push(bd);
@@ -757,7 +757,7 @@ function build3D(){meshes.forEach(m=>{scene.remove(m);m.geometry.dispose();if(m.
    const dd=(k,u0)=>dr&&dr.side===k?[u0+dr.i*T,u0+(dr.i+2)*T]:[null,null];
    if(gz.draw.s){const[p,q]=dd('s',x0);glassWall(S,GL,x0,x1,'x',z1,GH,p,q)}if(gz.draw.n){const[p,q]=dd('n',x0);glassWall(S,GL,x0,x1,'x',z0,GH,p,q)}
    if(gz.draw.e){const[p,q]=dd('e',z0);glassWall(S,GL,z0,z1,'z',x1,GH,p,q)}if(gz.draw.w){const[p,q]=dd('w',z0);glassWall(S,GL,z0,z1,'z',x0,GH,p,q)}}}
- LIFT=0;mkMesh(S,matSide);if(E.p.length)mkMesh(E,matEmis,0,true);mkMesh(GL,matGlass,3,true);
+ LIFT=0;mkMesh(S,matSide);if(E.p.length)mkMesh(E,matEmis,0,true);if(GL.p.length)mkMesh(GL,matGlass,3,true);
  pendMesh=PD.p.length?mkMesh(PD,matSide):null;pendE=PE.p.length?mkMesh(PE,matEmis,0,true):null;
  buildMonitors();buildSprites()}
 function tvZone(){return LAY==='tall'?zoneById.asset20:zoneById.hq}
@@ -1005,7 +1005,7 @@ function frame(now){const dt=Math.min(50,now-lastT);lastT=now;
   applyCamera(view);updateWalls(dt);updateSprites();renderer.render(scene,camera);talkTick(dt);drawOverlay();topBtn()}
  requestAnimationFrame(frame)}
 // ---------- данные
-const BUILD='16.4';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
+const BUILD='16.5';async function verCheck(){try{const r=await fetch('version.txt?t='+Date.now(),{cache:'no-store'});const v=(await r.text()).trim();if(v&&v!==BUILD&&!sessionStorage.getItem('rl'+v)){sessionStorage.setItem('rl'+v,1);location.reload()}}catch(e){}}
 verCheck();document.addEventListener('visibilitychange',()=>{if(!document.hidden)verCheck()});
 async function load(){try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});const d=await r.json();const first=!D;D=d;
   if(first){build();build3D();fitAll(true);schedT=200}else{bots.forEach(b=>{const nb=d.bots.find(x=>x.slug===b.slug);if(nb){b.act=nb.act;b.tasks=nb.tasks;b.st=status(b)}});const ss=sel&&sel.slug;if(bots.length!==d.bots.length){build();build3D()}else{rebuildCand()}if(ss&&bySlug[ss])openBot(bySlug[ss],true)}
