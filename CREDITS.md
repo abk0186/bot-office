@@ -23,3 +23,10 @@
 - **audio/fatiha.ogg, audio/fatiha.m4a**: сура аль-Фатиха (муратталь), читает Aaqib Azeez. Файл: [Chapter 1, Al-Fatiha (Murattal) - Recitation of the Holy Qur'an.mp3](https://commons.wikimedia.org/wiki/File:Chapter_1,_Al-Fatiha_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3). Автор: Atcovi (собственная работа). Лицензия: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 - **audio/kawthar.ogg, audio/kawthar.m4a**: сура аль-Кавсар (муратталь), читает Aaqib Azeez. Файл: [Chapter 108, Al-Kawthar (Murattal) - Recitation of the Holy Qur'an.mp3](https://commons.wikimedia.org/wiki/File:Chapter_108,_Al-Kawthar_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3). Автор: Atcovi. Лицензия: CC0 1.0.
 - **audio/ikhlas.ogg, audio/ikhlas.m4a**: сура аль-Ихлас (муратталь), читает Aaqib Azeez. Файл: [Chapter 112, Al-Ikhlas (Murattal) - Recitation of the Holy Qur'an.mp3](https://commons.wikimedia.org/wiki/File:Chapter_112,_Al-Ikhlas_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3). Автор: Atcovi. Лицензия: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Изменённые файлы распространяются на тех же условиях.
+
+## Короткие суры для чтения имама вслух (v17.7)
+Фаджр, магриб, иша и фард джума читаются вслух: аль-Фатиха + короткая сура (в каждом ракаате своя). Обработка та же (обрезка тишины, −18 LUFS, моно, Opus .ogg и AAC .m4a). Чтец — Aaqib Azeez (Atcovi), муратталь, Wikimedia Commons, лицензия CC0 1.0:
+- **audio/asr.*** — [Chapter 103, Al-Asr](https://commons.wikimedia.org/wiki/File:Chapter_103,_Al-Asr_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3)
+- **audio/falaq.*** — [Chapter 113, Al-Falaq](https://commons.wikimedia.org/wiki/File:Chapter_113,_Al-Falaq_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3)
+- **audio/nas.*** — [Chapter 114, Al-Nas](https://commons.wikimedia.org/wiki/File:Chapter_114,_Al-Nas_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3)
+- **audio/nasr.*** — [Chapter 110, An-Nasr](https://commons.wikimedia.org/wiki/File:Chapter_110,_An-Nasr_(Murattal)_-_Recitation_of_the_Holy_Qur%27an.mp3)
